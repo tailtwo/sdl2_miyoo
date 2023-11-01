@@ -129,17 +129,22 @@ static int MMIYOO_OpenDevice(_THIS, void *handle, const char *devname, int iscap
     return 0;
 }
 
-static void MMIYOO_PlayDevice(_THIS)
+static void MMIYOO_PlayDevice(_THIS) 
 {
 #if defined(MMIYOO)
     MI_AUDIO_Frame_t aoTestFrame;
+    MI_S32 s32RetSendStatus = 0;
 
     aoTestFrame.eBitwidth = stGetAttr.eBitwidth;
     aoTestFrame.eSoundmode = stGetAttr.eSoundmode;
     aoTestFrame.u32Len = this->hidden->mixlen;
     aoTestFrame.apVirAddr[0] = this->hidden->mixbuf;
     aoTestFrame.apVirAddr[1] = NULL;
-    MI_AO_SendFrame(AoDevId, AoChn, &aoTestFrame, 1);
+    do {
+        s32RetSendStatus = MI_AO_SendFrame(AoDevId, AoChn, &aoTestFrame, 1);
+        usleep(((stSetAttr.u32PtNumPerFrm * 1000) / stSetAttr.eSamplerate - 10) * 1000);
+    }
+    while(s32RetSendStatus == MI_AO_ERR_NOBUF);
 #endif
 }
 
@@ -161,4 +166,3 @@ static int MMIYOO_Init(SDL_AudioDriverImpl *impl)
 AudioBootStrap MMIYOOAUDIO_bootstrap = {"MMIYOO", "MMIYOO AUDIO DRIVER", MMIYOO_Init, 0};
 
 #endif
-
