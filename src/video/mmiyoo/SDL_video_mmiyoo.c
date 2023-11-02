@@ -54,6 +54,7 @@
 #include "SDL_event_mmiyoo.h"
 #include "SDL_opengles_mmiyoo.h"
 #include "SDL_framebuffer_mmiyoo.h"
+#include "neon.h"
 
 #include "hex_pen.h"
 
@@ -116,7 +117,7 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     if (pixels == NULL) {
         return -1;
     }
-    memcpy(gfx.tmp.virAddr, pixels, srcrect.h * pitch);
+    neon_memcpy(gfx.tmp.virAddr, pixels, srcrect.h * pitch);
     
     gfx.hw.opt.u32GlobalSrcConstColor = 0;
     gfx.hw.opt.eRotate = rotate;

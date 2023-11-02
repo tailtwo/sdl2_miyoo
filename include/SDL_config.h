@@ -256,7 +256,7 @@
 /* #undef SDL_JOYSTICK_DISABLED */
 /* #undef SDL_HAPTIC_DISABLED */
 #define SDL_HIDAPI_DISABLED 1
-#define SDL_SENSOR_DISABLED 1
+/* #undef SDL_SENSOR_DISABLED */
 /* #undef SDL_LOADSO_DISABLED */
 /* #undef SDL_RENDER_DISABLED */
 /* #undef SDL_THREADS_DISABLED */
@@ -336,7 +336,7 @@
 /* #undef SDL_SENSOR_ANDROID */
 /* #undef SDL_SENSOR_COREMOTION */
 /* #undef SDL_SENSOR_WINDOWS */
-/* #undef SDL_SENSOR_DUMMY */
+#define SDL_SENSOR_DUMMY 1
 
 /* Enable various shared object loading systems */
 #define SDL_LOADSO_DLOPEN 1
