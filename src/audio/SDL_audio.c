@@ -711,6 +711,16 @@ SDL_ClearQueuedAudio(SDL_AudioDeviceID devid)
     current_audio.impl.UnlockDevice(device);
 }
 
+int is_silence(const Uint8 *data, int len) {
+    for (int i = 0; i < len; i += 2) {
+        if (data[i] != 0 || data[i + 1] != 0) {
+            // printf("NO SILENCE DETECTED \n");
+            return 0;  // false
+        }
+    }
+    // printf("SILENCE DETECTED \n");
+    return 1;  // true
+}
 
 /* The general mixing thread function */
 static int SDLCALL
@@ -741,6 +751,7 @@ SDL_RunAudio(void *devicep)
 
     /* Loop, filling the audio buffers */
     while(!SDL_AtomicGet(&device->shutdown)) {
+        int data_is_silence;
         current_audio.impl.BeginLoopIteration(device);
         data_len = device->callbackspec.size;
 
@@ -772,6 +783,16 @@ SDL_RunAudio(void *devicep)
             callback(udata, data, data_len);
         }
         SDL_UnlockMutex(device->mixer_lock);
+        
+        data_is_silence = is_silence(data, data_len);
+
+        if(data_is_silence) {
+            Uint8 *null_buffer = (Uint8*)malloc(data_len);
+            if (null_buffer != NULL) {
+                memset(null_buffer, 0, data_len);  // fill buffer with zeros
+                data = null_buffer;
+            }
+        }
 
         if(device->stream) {
             /* Stream available audio to device, converting/resampling. */
