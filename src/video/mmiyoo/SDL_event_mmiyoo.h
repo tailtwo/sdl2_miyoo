@@ -27,6 +27,8 @@
 #include "../../SDL_internal.h"
 #include "SDL_event_mmiyoo.h"
 
+#define MOVE_INCREMENT 0.1
+
 #define MYKEY_UP            0
 #define MYKEY_DOWN          1
 #define MYKEY_LEFT          2
