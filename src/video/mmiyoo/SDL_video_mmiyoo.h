@@ -61,6 +61,7 @@
 #define MMIYOO_DRIVER_NAME          "mmiyoo"
 #define BASE_REG_RIU_PA             0x1f000000
 #define BASE_REG_MPLL_PA            (BASE_REG_RIU_PA + 0x103000 * 2)
+#define PLL_SIZE                    0x1000
 
 typedef struct MMIYOO_VideoInfo {
     SDL_Window *window;

@@ -38,6 +38,7 @@
 #include <time.h>
 #include <json-c/json.h>
 
+#include "../../cfg/SDL_picocfg_mmiyoo.h"
 #include "../../events/SDL_events_c.h"
 #include "../SDL_sysvideo.h"
 #include "../SDL_sysvideo.h"
@@ -59,12 +60,135 @@
 #include "hex_pen.h"
 
 MMIYOO_VideoInfo MMiyooVideoInfo={0};
+extern PICO pico;
 extern MMIYOO_EventInfo MMiyooEventInfo;
 
 static GFX gfx = {0};
 static int MMIYOO_VideoInit(_THIS);
 static int MMIYOO_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMode *mode);
 static void MMIYOO_VideoQuit(_THIS);
+
+
+static int get_cpuclock(void)
+{
+    static const uint64_t divsrc = 432000000llu * 524288;
+
+    int fd_mem = -1;
+    void *pll_map = NULL;
+    uint32_t rate = 0;
+    uint32_t lpf_value = 0;
+    uint32_t post_div = 0;
+
+    fd_mem = open("/dev/mem", O_RDWR);
+    if (fd_mem < 0) {
+        return 0;
+    }
+
+    pll_map = mmap(0, PLL_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd_mem, BASE_REG_MPLL_PA);
+    if (pll_map) {
+        volatile uint8_t* p8 = (uint8_t*)pll_map;
+        volatile uint16_t* p16 = (uint16_t*)pll_map;
+
+        lpf_value = p16[0x2a4] + (p16[0x2a6] << 16);
+        post_div = p16[0x232] + 1;
+        if (lpf_value == 0) {
+            lpf_value = (p8[0x2c2 << 1] << 16) + (p8[0x2c1 << 1] << 8) + p8[0x2c0 << 1];
+        }
+
+        if (lpf_value && post_div) {
+            rate = (divsrc / lpf_value * 2 / post_div * 16);
+        }
+        printf("Current cpuclock=%u (lpf=%u, post_div=%u)\n", rate, lpf_value, post_div);
+        munmap(pll_map, PLL_SIZE);
+    }
+    close(fd_mem);
+    return rate / 1000000;
+}
+
+static void write_file(const char* fname, char* str)
+{
+	int fd = open(fname, O_WRONLY);
+
+	if (fd >= 0) {
+        write(fd, str, strlen(str));
+        close(fd);
+    }
+}
+
+static int set_cpuclock(uint32_t newclock)
+{
+    int fd_mem = -1;
+    void *pll_map = NULL;
+    uint32_t post_div = 0;
+    char clockstr[16] = {0};
+    const char fn_governor[] = "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor";
+    const char fn_setspeed[] = "/sys/devices/system/cpu/cpufreq/policy0/scaling_setspeed";
+
+    fd_mem = open("/dev/mem", O_RDWR);
+    if (fd_mem < 0) {
+        return -1;
+    }
+
+    pll_map = mmap(0, PLL_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd_mem, BASE_REG_MPLL_PA);
+    if (pll_map) {
+        printf("Set cpuclock %dMHz\n", newclock);
+
+        newclock*= 1000;
+        sprintf(clockstr, "%d", newclock);
+        write_file(fn_governor, "userspace");
+        write_file(fn_setspeed, clockstr);
+
+        if (newclock >= 800000) {
+            post_div = 2;
+        }
+        else if (newclock >= 400000) {
+            post_div = 4;
+        }
+        else if (newclock >= 200000) {
+            post_div = 8;
+        }
+        else {
+            post_div = 16;
+        }
+
+        if (1) {
+            static const uint64_t divsrc = 432000000llu * 524288;
+            uint32_t rate = (newclock * 1000) / 16 * post_div / 2;
+            uint32_t lpf = (uint32_t)(divsrc / rate);
+            volatile uint16_t* p16 = (uint16_t*)pll_map;
+            uint32_t cur_post_div = (p16[0x232] & 0x0f) + 1;
+            uint32_t tmp_post_div = cur_post_div;
+
+            if (post_div > cur_post_div) {
+                while (tmp_post_div != post_div) {
+                    tmp_post_div <<= 1;
+                    p16[0x232] = (p16[0x232] & 0xf0) | ((tmp_post_div - 1) & 0x0f);
+                }
+            }
+
+            p16[0x2A8] = 0x0000;        // reg_lpf_enable = 0
+            p16[0x2AE] = 0x000f;        // reg_lpf_update_cnt = 32
+            p16[0x2A4] = lpf & 0xffff;  // set target freq to LPF high
+            p16[0x2A6] = lpf >> 16;     // set target freq to LPF high
+            p16[0x2B0] = 0x0001;        // switch to LPF control
+            p16[0x2B2]|= 0x1000;        // from low to high
+            p16[0x2A8] = 0x0001;        // reg_lpf_enable = 1
+            while(!(p16[0x2ba] & 1));   // polling done
+            p16[0x2A0] = lpf & 0xffff;  // store freq to LPF low
+            p16[0x2A2] = lpf >> 16;     // store freq to LPF low
+
+            if (post_div < cur_post_div) {
+                while (tmp_post_div != post_div) {
+                    tmp_post_div >>= 1;
+                    p16[0x232] = (p16[0x232] & 0xf0) | ((tmp_post_div - 1) & 0x0f);
+                }
+            }
+        }
+        munmap(pll_map, PLL_SIZE);
+    }
+    close(fd_mem);
+    return 0;
+}
 
 void GFX_Init(void)
 {
@@ -315,6 +439,10 @@ int MMIYOO_VideoInit(_THIS)
     SDL_AddVideoDisplay(&display, SDL_FALSE);
     
     GFX_Init();
+    read_pico_config();
+    get_cpuclock(); // silence compiler, not used for anything yet
+    set_cpuclock(pico.cpuclock);
+    initialiseKeyCodes();
     MMIYOO_EventInit();
     return 0;
 }

@@ -399,6 +399,7 @@ fi
 SOURCES="$SOURCES $srcdir/src/*.c"
 SOURCES="$SOURCES $srcdir/src/atomic/*.c"
 SOURCES="$SOURCES $srcdir/src/audio/*.c"
+SOURCES="$SOURCES $srcdir/src/cfg/*.c"
 SOURCES="$SOURCES $srcdir/src/cpuinfo/*.c"
 SOURCES="$SOURCES $srcdir/src/dynapi/*.c"
 SOURCES="$SOURCES $srcdir/src/events/*.c"
@@ -2404,7 +2405,7 @@ CheckMMiyooAudio()
         have_audio=yes
         if test x$HOST = xarm-linux; then
             EXTRA_CFLAGS="$EXTRA_CFLAGS -DMMIYOO -mcpu=cortex-a7 -mfpu=neon-vfpv4 -O3"
-            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx"
+            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneon_memcpy"
         fi
         SUMMARY_audio="${SUMMARY_audio} mmiyoo"
     fi
