@@ -55,8 +55,6 @@
 #define MMIYOO_KEYPAD_MODE 0
 #define MMIYOO_MOUSE_MODE  1
 
-void initialiseKeyCodes();
-
 typedef struct _MMIYOO_EventInfo {
     struct _keypad{
         uint32_t bitmaps;

@@ -81,27 +81,8 @@ void updateClockOnEvent(int adjust) {
     if (currentClock != newclock) {
         printf("Updating Clock to %d MHz\n", newclock);
         set_cpuclock(newclock);
+        pico.cpuclock = newclock;
     }
-}
-
-SDL_Scancode code[15];
-
-void initialiseKeyCodes() {
-    code[0] = pico.customkey.UpDpad;
-    code[1] = pico.customkey.DownDpad;
-    code[2] = pico.customkey.LeftDpad;
-    code[3] = pico.customkey.RightDpad;
-    code[4] = pico.customkey.A;
-    code[5] = pico.customkey.B;
-    code[6] = pico.customkey.X;
-    code[7] = pico.customkey.Y;
-    code[8] = pico.customkey.L1;
-    code[9] = pico.customkey.R1;
-    code[10] = pico.customkey.L2;
-    code[11] = pico.customkey.R2;
-    code[12] = pico.customkey.Select;
-    code[13] = pico.customkey.Start;
-    code[14] = pico.customkey.Menu;
 }
 
 void sendSpecial() { // manage sending CTRL etc
@@ -145,16 +126,7 @@ void sendConsoleEscape() { // sends SPLORE when you're stuck in console. (doesn'
     }
 }
 
-void releaseAll() { // release all keys
-    for (int cc = 0; cc < sizeof(code) / sizeof(code[0]); cc++) {
-        SDL_SendKeyboardKey(SDL_RELEASED, SDL_GetScancodeFromKey(code[cc]));
-    }
-    MMiyooEventInfo.keypad.bitmaps = 0;
-    pre_keypad_bitmaps = 0;
-}
-
 void modeSwitch() { // toggle fun for mouse/keypad mode
-    releaseAll();
     if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
         lastMouseX = MMiyooEventInfo.mouse.x;
         lastMouseY = MMiyooEventInfo.mouse.y;

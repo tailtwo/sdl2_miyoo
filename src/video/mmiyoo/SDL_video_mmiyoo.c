@@ -438,9 +438,8 @@ int MMIYOO_VideoInit(_THIS)
     
     GFX_Init();
     read_pico_config();
-    get_cpuclock(); // silence compiler, not used for anything yet
+    get_cpuclock();
     set_cpuclock(pico.cpuclock);
-    initialiseKeyCodes();
     MMIYOO_EventInit();
     return 0;
 }
