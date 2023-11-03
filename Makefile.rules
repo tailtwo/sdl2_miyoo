@@ -47,6 +47,9 @@ $(objects)/SDL_mixer.lo: /root/workspace/sdl2_miyoo/src/audio/SDL_mixer.c $(obje
 $(objects)/SDL_wave.lo: /root/workspace/sdl2_miyoo/src/audio/SDL_wave.c $(objects)/.created
 	$(RUN_CMD_CC)$(LIBTOOL) --tag=CC --mode=compile $(CC) $(CFLAGS) $(EXTRA_CFLAGS) -MMD -MT $@ -c $< -o $@
 
+$(objects)/SDL_picocfg_mmiyoo.lo: /root/workspace/sdl2_miyoo/src/cfg/SDL_picocfg_mmiyoo.c $(objects)/.created
+	$(RUN_CMD_CC)$(LIBTOOL) --tag=CC --mode=compile $(CC) $(CFLAGS) $(EXTRA_CFLAGS) -MMD -MT $@ -c $< -o $@
+
 $(objects)/SDL_cpuinfo.lo: /root/workspace/sdl2_miyoo/src/cpuinfo/SDL_cpuinfo.c $(objects)/.created
 	$(RUN_CMD_CC)$(LIBTOOL) --tag=CC --mode=compile $(CC) $(CFLAGS) $(EXTRA_CFLAGS) -MMD -MT $@ -c $< -o $@
 

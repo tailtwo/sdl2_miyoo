@@ -1,4 +1,5 @@
 build/
+docs/
 build-*/
 !build-scripts/
 buildbot/

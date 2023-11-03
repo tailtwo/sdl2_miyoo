@@ -62,6 +62,28 @@ int r2Hold = 0;
 
 uint32_t hotkey = 0;
 
+void updateClockOnEvent(int adjust) {
+    int currentClock = get_cpuclock();
+    int newclock = currentClock + adjust;
+
+    if (newclock > MMIYOO_MAX_CPU_CLOCK) {
+        printf("Maximum Clock of %d MHz reached. Not increasing further.\n", MMIYOO_MAX_CPU_CLOCK);
+        newclock = MMIYOO_MAX_CPU_CLOCK;
+    }
+
+    if (newclock < MMIYOO_MIN_CPU_CLOCK) {
+        printf("Minimum Clock of %d MHz reached. Not decreasing further.\n", MMIYOO_MIN_CPU_CLOCK);
+        newclock = MMIYOO_MIN_CPU_CLOCK;
+    }
+
+    printf("Current Clock: %d MHz\n", currentClock);
+
+    if (currentClock != newclock) {
+        printf("Updating Clock to %d MHz\n", newclock);
+        set_cpuclock(newclock);
+    }
+}
+
 SDL_Scancode code[15];
 
 void initialiseKeyCodes() {
@@ -122,7 +144,6 @@ void sendConsoleEscape() { // sends SPLORE when you're stuck in console. (doesn'
         }
     }
 }
-
 
 void releaseAll() { // release all keys
     for (int cc = 0; cc < sizeof(code) / sizeof(code[0]); cc++) {
@@ -332,7 +353,15 @@ int EventUpdate(void *data)
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_L1))) { // reload the game
                         specialKey = SDL_SCANCODE_R; 
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L1);
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP))) {
+                        updateClockOnEvent(pico.cpuclockincrement);
+                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_UP);
                     }
+                    else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_DOWN))) {
+                        updateClockOnEvent(-pico.cpuclockincrement);
+                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_DOWN);
+                    }
+
                 }
             }
         }

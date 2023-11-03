@@ -89,8 +89,8 @@ typedef struct _GFX {
 void GFX_Clear(void);
 void GFX_Flip(void);
 int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, int alpha, int rotate);
-
-int draw_pen(const void *pixels, int width, int pitch);
+int get_cpuclock(void);
+int set_cpuclock(uint32_t newclock);
 
 #endif
 

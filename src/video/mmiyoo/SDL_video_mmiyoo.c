@@ -41,7 +41,6 @@
 #include "../../cfg/SDL_picocfg_mmiyoo.h"
 #include "../../events/SDL_events_c.h"
 #include "../SDL_sysvideo.h"
-#include "../SDL_sysvideo.h"
 #include "../SDL_pixels_c.h"
 
 #include "SDL_image.h"
@@ -68,8 +67,7 @@ static int MMIYOO_VideoInit(_THIS);
 static int MMIYOO_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMode *mode);
 static void MMIYOO_VideoQuit(_THIS);
 
-
-static int get_cpuclock(void)
+int get_cpuclock(void)
 {
     static const uint64_t divsrc = 432000000llu * 524288;
 
@@ -98,14 +96,14 @@ static int get_cpuclock(void)
         if (lpf_value && post_div) {
             rate = (divsrc / lpf_value * 2 / post_div * 16);
         }
-        printf("Current cpuclock=%u (lpf=%u, post_div=%u)\n", rate, lpf_value, post_div);
+        // printf("Current cpuclock=%u (lpf=%u, post_div=%u)\n", rate, lpf_value, post_div);
         munmap(pll_map, PLL_SIZE);
     }
     close(fd_mem);
     return rate / 1000000;
 }
 
-static void write_file(const char* fname, char* str)
+void write_file(const char* fname, char* str)
 {
 	int fd = open(fname, O_WRONLY);
 
@@ -115,7 +113,7 @@ static void write_file(const char* fname, char* str)
     }
 }
 
-static int set_cpuclock(uint32_t newclock)
+int set_cpuclock(uint32_t newclock)
 {
     int fd_mem = -1;
     void *pll_map = NULL;
@@ -454,6 +452,7 @@ static int MMIYOO_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMo
 
 void MMIYOO_VideoQuit(_THIS)
 {
+    write_pico_config();
     GFX_Quit();
     MMIYOO_EventDeinit();
 }
