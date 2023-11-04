@@ -9,6 +9,55 @@
 PICO pico = {0};
 int cpuclock = 0;
 
+void picoSetAllDefaults() {
+    pico.mouse.scaleFactor = MMIYOO_DEFAULT_SCALE_FACTOR;
+    pico.mouse.acceleration = MMIYOO_DEFAULT_ACCELERATION;
+    pico.mouse.accelerationRate = MMIYOO_DEFAULT_ACCELERATION_RATE;
+    pico.mouse.maxAcceleration = MMIYOO_DEFAULT_MAX_ACCELERATION;
+    pico.mouse.incrementModifier = MMIYOO_DEFAULT_INCREMENT_MODIFIER;
+    pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+    pico.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+    pico.customkey.A = MMIYOO_DEFAULT_KEY_A;
+    pico.customkey.B = MMIYOO_DEFAULT_KEY_B;
+    pico.customkey.X = MMIYOO_DEFAULT_KEY_X;
+    pico.customkey.Y = MMIYOO_DEFAULT_KEY_Y;
+    pico.customkey.L1 = MMIYOO_DEFAULT_KEY_L1;
+    pico.customkey.L2 = MMIYOO_DEFAULT_KEY_L2;
+    pico.customkey.R1 = MMIYOO_DEFAULT_KEY_R1;
+    pico.customkey.R2 = MMIYOO_DEFAULT_KEY_R2;
+    pico.customkey.LeftDpad = MMIYOO_DEFAULT_KEY_LeftDpad;
+    pico.customkey.RightDpad = MMIYOO_DEFAULT_KEY_RightDpad;
+    pico.customkey.UpDpad = MMIYOO_DEFAULT_KEY_UpDpad;
+    pico.customkey.DownDpad = MMIYOO_DEFAULT_KEY_DownDpad;
+    pico.customkey.Start = MMIYOO_DEFAULT_KEY_Start;
+    pico.customkey.Select = MMIYOO_DEFAULT_KEY_Select;
+    pico.customkey.Menu = MMIYOO_DEFAULT_KEY_MENU;
+    pico.current_border_id = DEFAULT_BORDER_ID;
+}
+
+int cfgReadOverlay(struct json_object *jfile) {
+    struct json_object *joverlay = NULL;
+    struct json_object *jval = NULL;
+
+    if (!json_object_object_get_ex(jfile, "overlay", &joverlay) || !joverlay) {
+        printf("Overlay settings not found in json file. Using defaults.\n");
+        pico.current_border_id = DEFAULT_BORDER_ID;
+        return 0;
+    }
+    
+    json_object_object_get_ex(joverlay, "current_overlay", &jval);
+    
+    if (jval) {
+        pico.current_border_id = json_object_get_int(jval);
+        printf("[json] pico.current_border_id: %d\n", pico.current_border_id);
+    } else {
+        printf("pico.current_border_id not found in json file. Using default: %d.\n", DEFAULT_BORDER_ID);
+        pico.current_border_id = DEFAULT_BORDER_ID;
+    }
+
+    return 0;
+}
+
 int cfgReadMouse(struct json_object *jfile) {
     struct json_object *jval = NULL;
     struct json_object *jScaleFactor = NULL;
@@ -16,6 +65,7 @@ int cfgReadMouse(struct json_object *jfile) {
     struct json_object *jAccelerationRate = NULL;
     struct json_object *jMaxAcceleration = NULL;
     struct json_object *jIncrementModifier = NULL;
+       
     json_object_object_get_ex(jfile, "mouse", &jval);
 
     if (jval) {
@@ -68,9 +118,20 @@ int cfgReadMouse(struct json_object *jfile) {
 }
 
 int cfgReadClock(struct json_object *jfile) {
+    
+    struct json_object *jperf = NULL;
     struct json_object *jval = NULL;
-    json_object_object_get_ex(jfile, "cpuclock", &jval);
-
+        
+        
+    if (!json_object_object_get_ex(jfile, "performance", &jperf) || !jperf) {
+        printf("Performance settings not found in json file. Using defaults.\n");
+        pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+        pico.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+        return 0;
+    }
+    
+    json_object_object_get_ex(jperf, "cpuclock", &jval);
+    
     if (jval) {
         const char *cpuclock_str = json_object_get_string(jval);
         if (cpuclock_str) {
@@ -94,7 +155,7 @@ int cfgReadClock(struct json_object *jfile) {
         pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
     }
 
-    json_object_object_get_ex(jfile, "cpuclockincrement", &jval);
+    json_object_object_get_ex(jperf, "cpuclockincrement", &jval);
     if (jval) {
         const char *cpuclockincrement_str = json_object_get_string(jval);
         if (cpuclockincrement_str) {
@@ -118,6 +179,8 @@ int cfgReadClock(struct json_object *jfile) {
     return 0;
 }
 
+
+// needs refactoring
 int cfgReadCustomKeys(struct json_object *jfile) {
     struct json_object *jCustomKeys = NULL;
     SDL_Keycode default_keycode = SDLK_UNKNOWN;
@@ -127,6 +190,7 @@ int cfgReadCustomKeys(struct json_object *jfile) {
     struct json_object *jval = NULL;
     
     json_object_object_get_ex(jfile, "customkeys", &jCustomKeys);
+    
     if (!jCustomKeys) {
         printf("customkeys block not found in json file. Using defaults.\n");
         return 0;
@@ -134,7 +198,6 @@ int cfgReadCustomKeys(struct json_object *jfile) {
 
     for (int i = 0; i < numKeys; ++i) {
         json_object_object_get_ex(jCustomKeys, keys[i], &jval);
-
         
         if (strcmp(keys[i], "A") == 0) default_keycode = MMIYOO_DEFAULT_KEY_A;
         else if (strcmp(keys[i], "B") == 0) default_keycode = MMIYOO_DEFAULT_KEY_B;
@@ -217,7 +280,7 @@ SDL_Keycode stringToKeycode(const char *keyString) {
     return SDLK_UNKNOWN;
 }
 
-int read_pico_config(void)
+int picoConfigRead(void)
 {
     char *last_slash = strrchr(pico.cfg_path, '/');
     struct json_object *jfile = NULL;
@@ -232,20 +295,24 @@ int read_pico_config(void)
     jfile = json_object_from_file(pico.cfg_path);
     if (jfile == NULL) {
         printf("Failed to read settings from json file (%s)\n", pico.cfg_path);
+        picoSetAllDefaults();
         return -1;
     }
     
     cfgReadCustomKeys(jfile);
     cfgReadClock(jfile);
     cfgReadMouse(jfile);
+    cfgReadOverlay(jfile);
 
     json_object_put(jfile);
     return 0;
 }
 
-int write_pico_config(void) {
+int picoConfigWrite(void) {
     struct json_object *jfile = NULL;
     struct json_object *jmouse = NULL;
+    struct json_object *jperformance = NULL;
+    struct json_object *joverlay = NULL;
 
     jfile = json_object_from_file(pico.cfg_path);
 
@@ -256,6 +323,39 @@ int write_pico_config(void) {
             return -1;
         }
     }
+
+    // mouse
+    jmouse = json_object_new_object();
+    json_object_object_add(jmouse, "scaleFactor", json_object_new_int(pico.mouse.scaleFactor));
+    json_object_object_add(jmouse, "acceleration", json_object_new_double(pico.mouse.acceleration));
+    json_object_object_add(jmouse, "accelerationRate", json_object_new_double(pico.mouse.accelerationRate));
+    json_object_object_add(jmouse, "maxAcceleration", json_object_new_double(pico.mouse.maxAcceleration));
+    json_object_object_add(jmouse, "incrementModifier", json_object_new_double(pico.mouse.incrementModifier));
+    json_object_object_add(jfile, "mouse", jmouse);
+
+    // perf
+    jperformance = json_object_new_object();
+    json_object_object_add(jperformance, "cpuclock", json_object_new_int(pico.cpuclock));
+    json_object_object_add(jperformance, "cpuclockincrement", json_object_new_int(pico.cpuclockincrement));
+    json_object_object_add(jfile, "performance", jperformance);
+
+    // overlay
+    joverlay = json_object_new_object();
+    json_object_object_add(joverlay, "current_overlay", json_object_new_int(pico.current_border_id));
+    json_object_object_add(jfile, "overlay", joverlay);
+
+    // write it then
+    if (json_object_to_file_ext(pico.cfg_path, jfile, JSON_C_TO_STRING_PRETTY) != 0) {
+        printf("Failed to write settings to json file (%s)\n", pico.cfg_path);
+        json_object_put(jfile);
+        return -1;
+    }
+
+    json_object_put(jfile);
+    printf("Updated settings in json file (%s) successfully!\n", pico.cfg_path);
+    return 0;
+}
+
 
      // custom keys but don't write these as they shouldn't change
     // jcustomkeys = json_object_new_object();
@@ -275,25 +375,3 @@ int write_pico_config(void) {
     // json_object_object_add(jfile, "Select", json_object_new_string(SDL_GetKeyName(pico.customkey.Select)));
     // json_object_object_add(jfile, "Menu", json_object_new_string(SDL_GetKeyName(pico.customkey.Menu)));
     // json_object_object_add(jfile, "customkeys", jcustomkeys);
-
-    jmouse = json_object_new_object();
-    json_object_object_add(jmouse, "scaleFactor", json_object_new_int(pico.mouse.scaleFactor));
-    json_object_object_add(jmouse, "acceleration", json_object_new_double(pico.mouse.acceleration));
-    json_object_object_add(jmouse, "accelerationRate", json_object_new_double(pico.mouse.accelerationRate));
-    json_object_object_add(jmouse, "maxAcceleration", json_object_new_double(pico.mouse.maxAcceleration));
-    json_object_object_add(jmouse, "incrementModifier", json_object_new_double(pico.mouse.incrementModifier));
-    json_object_object_add(jfile, "mouse", jmouse);
-
-    json_object_object_add(jfile, "cpuclock", json_object_new_int(pico.cpuclock));
-    json_object_object_add(jfile, "cpuclockincrement", json_object_new_int(pico.cpuclockincrement));
-
-    if (json_object_to_file(pico.cfg_path, jfile) != 0) {
-        printf("Failed to write settings to json file (%s)\n", pico.cfg_path);
-        json_object_put(jfile);
-        return -1;
-    }
-
-    json_object_put(jfile);
-    printf("Updated settings in json file (%s) successfully!\n", pico.cfg_path);
-    return 0;
-}

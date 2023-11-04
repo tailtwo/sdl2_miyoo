@@ -67,6 +67,163 @@ static int MMIYOO_VideoInit(_THIS);
 static int MMIYOO_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMode *mode);
 static void MMIYOO_VideoQuit(_THIS);
 
+int fileExists(const char *path) {
+    FILE *file;
+    if ((file = fopen(path, "r"))) {
+        fclose(file);
+        return 1;
+    }
+    return 0;
+}
+
+int preloadResources() {
+    char buf[255] = {0};
+    SDL_Surface *t = NULL;
+    SDL_Surface *tmp = SDL_CreateRGBSurface(0, 32, 32, 32, 0, 0, 0, 0);
+    
+    if (tmp) {
+        DIR *dir; 
+        struct dirent *ent;
+        int id = 0;
+        char filepath[PATH_MAX];
+        SDL_Surface *converted_surface;
+        pico.total_borders_loaded = 0;
+
+        if ((dir = opendir(BORDER_PATH)) != NULL) {
+            while ((ent = readdir(dir)) != NULL) {
+                if (ent->d_type == DT_DIR) continue;
+                snprintf(filepath, sizeof(filepath), "%s/%s", BORDER_PATH, ent->d_name);
+                t = IMG_Load(filepath);
+                if (t) {
+                    converted_surface = SDL_ConvertSurface(t, tmp->format, 0);
+                    SDL_FreeSurface(t);
+
+                    if (!converted_surface) {
+                        fprintf(stderr, "SDL_ConvertSurface failed: %s\n", SDL_GetError());
+                        return -1;
+                        continue;
+                    }
+
+                    if (strcmp(ent->d_name, "def_border.png") == 0) {
+                        pico.border[0] = converted_surface;
+                        printf("%s, default border loaded\n", __func__);
+                    } else {
+                        id++;
+                        pico.border[id] = converted_surface;
+                        printf("%s, %s loaded with ID %d\n", __func__, ent->d_name, id);
+                        pico.total_borders_loaded++;
+                    }
+                } else {
+                    fprintf(stderr, "IMG_Load failed: %s\n", SDL_GetError());
+                    return -2;
+                }
+            }
+            closedir(dir);
+        } else {
+            fprintf(stderr, "Could not open border directory: %s\n", BORDER_PATH);
+            return -3;
+        }
+
+        for (int cc = 0; cc <= 9; ++cc) {
+            sprintf(buf, "%s/%d.png", DIGIT_PATH, cc);
+            if (fileExists(buf)) {
+                t = IMG_Load(buf);
+                if (t) {
+                    pico.digit[cc] = SDL_ConvertSurface(t, tmp->format, 0);
+                    SDL_FreeSurface(t);
+                    printf("%s, %s loaded\n", __func__, buf);
+                } else {
+                    fprintf(stderr, "ERROR loading digit image: %s\n", buf);
+                    pico.digit[cc] = NULL;
+                    return -4;
+                }
+            } else {
+                fprintf(stderr, "ERROR digit image file does not exist: %s\n", buf);
+                pico.digit[cc] = NULL;
+                return -5;
+            }
+        }
+        SDL_FreeSurface(tmp);
+    } else {
+        fprintf(stderr, "ERROR creating RGB surface.\n");
+    }
+    return 0;
+}
+
+int drawBorderImage()
+{
+    SDL_Rect srt = {0};
+    SDL_Rect drt = {0};
+    SDL_Surface* border_surface;
+
+    int border_id = pico.current_border_id;
+    border_surface = pico.border[border_id];
+
+    if (border_id < 0 || border_id >= MAX_BORDERS || !pico.border[border_id]) {
+        printf("ERROR, no border image set for ID %d\n", border_id);
+        pico.state.refresh_border = 0;
+        return 1;
+    }
+
+    srt = (SDL_Rect){0, 0, border_surface->w, border_surface->h};
+    drt = (SDL_Rect){0, 0, border_surface->w, border_surface->h};
+
+    GFX_Copy(border_surface->pixels, srt, drt, border_surface->pitch, 0, E_MI_GFX_ROTATE_180);
+    printf("%s, border %d drawn\n", __func__, border_id);
+
+    return 0;
+}
+
+int drawCPUClock(int val, int num)
+{
+    SDL_Rect srt = {0};
+    SDL_Rect drt = {0};
+    SDL_Surface *p = NULL;
+    
+    if (num <= 0 || num > 10) {
+        fprintf(stderr, "ERROR, invalid number of digits specified.\n");
+        return 1;
+    }
+
+    for (int cc = 0; cc < num; cc++) {
+        p = pico.digit[0];
+
+        if (!p) {
+            fprintf(stderr, "ERROR, digit image not set for value 0\n");
+            pico.state.oc_changed = 0;
+            return 1;
+        }
+
+        srt = (SDL_Rect){0, 0, p->w, p->h};
+        drt = (SDL_Rect){640 - (p->w * (num - cc)), 0, p->w, p->h};
+
+        GFX_Copy(p->pixels, srt, drt, p->pitch, 0, E_MI_GFX_ROTATE_180);
+    }
+
+    // Now draw the actual number, right to left
+    for (int cc = num - 1; cc >= 0 && val > 0; cc--) {
+        int digit = val % 10;
+        val /= 10;
+
+        p = pico.digit[digit];
+        if (!p) {
+            fprintf(stderr, "ERROR, digit image not set for value %d\n", digit);
+            pico.state.oc_changed = 0;
+            return 1;
+        }
+
+        srt = (SDL_Rect){0, 0, p->w, p->h};
+        drt = (SDL_Rect){640 - (p->w * (cc + 1)), 0, p->w, p->h};
+
+        GFX_Copy(p->pixels, srt, drt, p->pitch, 0, E_MI_GFX_ROTATE_180);
+    }
+
+    pico.state.oc_decay = 250;
+    printf("%s, clock drawn\n", __func__);
+    return 0;
+}
+
+
 int get_cpuclock(void)
 {
     static const uint64_t divsrc = 432000000llu * 524288;
@@ -274,8 +431,10 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     MI_SYS_FlushInvCache(gfx.tmp.virAddr, pitch * srcrect.h);
     MI_GFX_BitBlit(&gfx.hw.src.surf, &gfx.hw.src.rt, &gfx.hw.dst.surf, &gfx.hw.dst.rt, &gfx.hw.opt, &u16Fence);
     MI_GFX_WaitAllDone(FALSE, u16Fence);
+    
     return 0;
 }
+
 
 void GFX_Flip(void)
 {
@@ -303,6 +462,8 @@ int MMIYOO_CreateWindow(_THIS, SDL_Window *window)
     MMiyooVideoInfo.window = window;
     printf("%s, w:%d, h:%d\n", __func__, window->w, window->h);
     //glUpdateBufferSettings(fb_flip, &fb_idx, fb_vaddr);
+    pico.state.push_update = 4;
+    pico.state.refresh_border = 4;
     return 0;
 }
 
@@ -362,6 +523,8 @@ VideoBootStrap MMIYOO_bootstrap = {MMIYOO_DRIVER_NAME, "MMIYOO VIDEO DRIVER", MM
 
 int MMIYOO_VideoInit(_THIS)
 {
+
+    int result;
     SDL_DisplayMode mode={0};
     SDL_VideoDisplay display={0};
 
@@ -437,10 +600,33 @@ int MMIYOO_VideoInit(_THIS)
     SDL_AddVideoDisplay(&display, SDL_FALSE);
     
     GFX_Init();
-    read_pico_config();
+    picoConfigRead();
     get_cpuclock();
     set_cpuclock(pico.cpuclock);
     MMIYOO_EventInit();
+        
+    result = preloadResources();
+    if (result != 0) {
+        switch (result) {
+            case -1:
+                fprintf(stderr, "Error: Failed to create RGB surface.\n");
+                break;
+            case -2:
+                fprintf(stderr, "Error: Could not open border directory.\n");
+                break;
+            case -3:
+                fprintf(stderr, "Error: Failed to load an image.\n");
+                break;
+            case -4:
+                fprintf(stderr, "ERROR loading digit image\n");
+                break;
+            case -5:
+                fprintf(stderr, "ERROR digit image file does not exist\n");
+                break;
+            default:
+                fprintf(stderr, "An unknown error occurred.\n");
+        }
+    }
     return 0;
 }
 
@@ -451,7 +637,24 @@ static int MMIYOO_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMo
 
 void MMIYOO_VideoQuit(_THIS)
 {
-    write_pico_config();
+    int cc = 0;
+
+    picoConfigWrite();
+    
+    for (cc=0; cc<=9; cc++) { // dealloc the digit icons
+        if (pico.digit[cc]) {
+            SDL_FreeSurface(pico.digit[cc]);
+            pico.digit[cc] = NULL;
+        }
+    }
+    
+    for (int id = 0; id < pico.total_borders_loaded; id++) { // dealloc the borders
+        if (pico.border[id]) {
+            SDL_FreeSurface(pico.border[id]);
+            pico.border[id] = NULL;
+        }
+    }
+    
     GFX_Quit();
     MMIYOO_EventDeinit();
 }

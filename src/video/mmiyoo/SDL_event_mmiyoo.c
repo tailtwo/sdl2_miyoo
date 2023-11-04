@@ -53,7 +53,6 @@ static SDL_Thread *thread = NULL;
 static uint32_t pre_keypad_bitmaps = 0;
 static int lastMouseX = 160;
 static int lastMouseY = 120;
-
 int volume_inc(void);
 int volume_dec(void);
 
@@ -67,21 +66,36 @@ void updateClockOnEvent(int adjust) {
     int newclock = currentClock + adjust;
 
     if (newclock > MMIYOO_MAX_CPU_CLOCK) {
-        printf("Maximum Clock of %d MHz reached. Not increasing further.\n", MMIYOO_MAX_CPU_CLOCK);
+        // printf("Maximum Clock of %d MHz reached. Not increasing further.\n", MMIYOO_MAX_CPU_CLOCK);
         newclock = MMIYOO_MAX_CPU_CLOCK;
     }
 
     if (newclock < MMIYOO_MIN_CPU_CLOCK) {
-        printf("Minimum Clock of %d MHz reached. Not decreasing further.\n", MMIYOO_MIN_CPU_CLOCK);
+        // printf("Minimum Clock of %d MHz reached. Not decreasing further.\n", MMIYOO_MIN_CPU_CLOCK);
         newclock = MMIYOO_MIN_CPU_CLOCK;
     }
 
-    printf("Current Clock: %d MHz\n", currentClock);
+    // printf("Current Clock: %d MHz\n", currentClock);
 
     if (currentClock != newclock) {
-        printf("Updating Clock to %d MHz\n", newclock);
+        // printf("Updating Clock to %d MHz\n", newclock);
         set_cpuclock(newclock);
         pico.cpuclock = newclock;
+        pico.state.oc_changed = 4;
+        pico.state.push_update = 4;
+    }
+}
+
+void updateBorderOnEvent() {
+    if (pico.current_border_id < 0) {
+        pico.current_border_id = 0;
+        // printf("Cannot scroll past 0\n");
+    } else if (pico.current_border_id >= pico.total_borders_loaded) {
+        pico.current_border_id = pico.total_borders_loaded - 1;
+        // printf("Cannot scroll past the last border\n");
+    } else {
+        pico.state.push_update = 4;
+        pico.state.refresh_border = 4;
     }
 }
 
@@ -126,18 +140,17 @@ void sendConsoleEscape() { // sends SPLORE when you're stuck in console. (doesn'
     }
 }
 
-void modeSwitch() { // toggle fun for mouse/keypad mode
+void modeSwitch() { // toggle func for mouse/keypad mode
+    MMiyooEventInfo.mode = (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) ? MMIYOO_KEYPAD_MODE : MMIYOO_MOUSE_MODE;
     if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
-        lastMouseX = MMiyooEventInfo.mouse.x;
-        lastMouseY = MMiyooEventInfo.mouse.y;
-        MMiyooEventInfo.mode = MMIYOO_KEYPAD_MODE;
-        printf("Mode switched to KEYPAD\n");
-    } else if (MMiyooEventInfo.mode == MMIYOO_KEYPAD_MODE) {
-        MMiyooEventInfo.mode = MMIYOO_MOUSE_MODE;
         MMiyooEventInfo.mouse.x = lastMouseX;
         MMiyooEventInfo.mouse.y = lastMouseY;
         printf("Mode switched to MOUSE\n");
-    } 
+    } else {
+        lastMouseX = MMiyooEventInfo.mouse.x;
+        lastMouseY = MMiyooEventInfo.mouse.y;
+        printf("Mode switched to KEYPAD\n");
+    }
 }
 
 void handleR2Event(struct input_event ev) { // R2 for speeding up the mouse
@@ -202,7 +215,6 @@ void updateMousePosition(int xDirection, int yDirection) {
     // printf("Updated X-coordinate: %d, Y-coordinate: %d\n", MMiyooEventInfo.mouse.x, MMiyooEventInfo.mouse.y);
 }
 
-
 void flushEvents(void) {
     SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 }
@@ -215,9 +227,9 @@ void MMIYOO_EventInit(void)
 
     pre_keypad_bitmaps = 0;
     memset(&MMiyooEventInfo, 0, sizeof(MMiyooEventInfo));
-    MMiyooEventInfo.mouse.minx = 0;
+    MMiyooEventInfo.mouse.minx = 38;
     MMiyooEventInfo.mouse.miny = 0;
-    MMiyooEventInfo.mouse.maxx = 320;
+    MMiyooEventInfo.mouse.maxx = 278;
     MMiyooEventInfo.mouse.maxy = 240;
     MMiyooEventInfo.mouse.x = 160;
     MMiyooEventInfo.mouse.y = 120;
@@ -269,7 +281,19 @@ int EventUpdate(void *data)
     struct input_event ev = {0};
     uint32_t bit = 0;
 
-    while (running) {
+    while (running) { 
+    
+        static int borderRedrawn = 0;  
+
+        if (pico.state.oc_decay > 0) {
+            pico.state.oc_decay--;
+            borderRedrawn = 0; 
+        } else if (!borderRedrawn) {
+            pico.state.refresh_border = 4;
+            pico.state.push_update = 4;
+            borderRedrawn = 1;
+        }
+        
         SDL_SemWait(event_sem);
         if (event_fd > 0) {
             if (read(event_fd, &ev, sizeof(struct input_event))) {
@@ -291,10 +315,14 @@ int EventUpdate(void *data)
                                 handleR2Event(ev);
                             }
                             break;
-                        case 103: bit = (1 << MYKEY_UP);      break;
-                        case 108: bit = (1 << MYKEY_DOWN);    break;
-                        case 105: bit = (1 << MYKEY_LEFT);    break;
-                        case 106: bit = (1 << MYKEY_RIGHT);   break;
+                        case 103: bit = (1 << MYKEY_UP);      
+                            break;
+                        case 108: bit = (1 << MYKEY_DOWN);    
+                            break;
+                        case 105: bit = (1 << MYKEY_LEFT);    
+                            break;
+                        case 106: bit = (1 << MYKEY_RIGHT);   
+                            break;
                         case 57:  bit = (1 << MYKEY_A);       break;
                         case 29:  bit = (1 << MYKEY_B);       break;
                         case 42:  bit = (1 << MYKEY_X);       break;
@@ -325,13 +353,20 @@ int EventUpdate(void *data)
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_L1))) { // reload the game
                         specialKey = SDL_SCANCODE_R; 
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L1);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP))) {
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP))) { // overclock increase
                         updateClockOnEvent(pico.cpuclockincrement);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_UP);
-                    }
-                    else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_DOWN))) {
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_DOWN))) { // overclock decrease
                         updateClockOnEvent(-pico.cpuclockincrement);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_DOWN);
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_LEFT))) { // border next
+                        pico.current_border_id = (pico.current_border_id + 1) % pico.total_borders_loaded;
+                        updateBorderOnEvent();
+                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_LEFT);
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_RIGHT))) { // border previous
+                        pico.current_border_id = (pico.current_border_id - 1 + pico.total_borders_loaded) % pico.total_borders_loaded;
+                        updateBorderOnEvent();
+                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_RIGHT);
                     }
 
                 }
@@ -439,6 +474,7 @@ void MMIYOO_PumpEvents(_THIS)
         
         pre_keypad_bitmaps = MMiyooEventInfo.keypad.bitmaps;
     }
+    
     SDL_SemPost(event_sem);
 }
 

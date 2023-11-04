@@ -69,8 +69,22 @@ typedef struct MMIYOO_VideoInfo {
 
 typedef struct _GFX {
     int fd;
+    int fd_fb;
+
     struct fb_var_screeninfo vinfo;
     struct fb_fix_screeninfo finfo;
+
+    MI_PHY fb_phyAddr;
+    void *fb_virAddr;
+
+    MI_PHY tmp_phyAddr;
+    void *tmp_virAddr;
+
+    MI_GFX_Surface_t stSrc;
+    MI_GFX_Rect_t stSrcRect;
+    MI_GFX_Surface_t stDst;
+    MI_GFX_Rect_t stDstRect;
+    MI_GFX_Opt_t stOpt;
 
     struct _DMA {
         MI_PHY phyAddr;
@@ -88,9 +102,12 @@ typedef struct _GFX {
 
 void GFX_Clear(void);
 void GFX_Flip(void);
+int GFX_CopyPixels(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, int alpha, int rotate);
 int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, int alpha, int rotate);
 int get_cpuclock(void);
 int set_cpuclock(uint32_t newclock);
+int drawCPUClock(int val, int num);
+int drawBorderImage();
 
 #endif
 

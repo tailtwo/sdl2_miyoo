@@ -29,6 +29,7 @@
 #include "../SDL_sysrender.h"
 #include "../../video/mmiyoo/SDL_video_mmiyoo.h"
 #include "../../video/mmiyoo/SDL_event_mmiyoo.h"
+#include "../../cfg/SDL_picocfg_mmiyoo.h"
 
 typedef struct MMIYOO_TextureData {
     void *data;
@@ -56,6 +57,7 @@ struct _NDS_TEXTURE {
 };
 
 extern MMIYOO_EventInfo MMiyooEventInfo;
+extern PICO pico;
 
 static struct _NDS_TEXTURE ntex[MAX_TEXTURE] = {0};
 
@@ -206,23 +208,46 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
     int pitch = 0;
     SDL_Rect dst = {0};
     const void *pixels = NULL;
+    static int show_digit_val = 0;
+    static int show_digit_num = 0;
 
     float sx = 640.0 / srcrect->w;
     float sy = 480.0 / srcrect->h;
     float m = sx < sy ? sx : sy;
-
     pitch = get_pitch(texture);
     pixels = get_pixels(texture);
-
+    
     if ((pitch == 0) || (pixels == NULL)) {
         return 0;
     }
+    
+    if (pico.state.push_update > 0) {  
+        pico.state.push_update -= 1;
 
+        if (pico.state.oc_changed > 0) {
+            show_digit_num = 4;
+            show_digit_val = get_cpuclock();
+            if (drawCPUClock(show_digit_val, show_digit_num) != 0) {
+                printf("%s, unable to draw cpuclock images\n", __func__);
+            }
+            pico.state.oc_changed -= 1;
+        }
+
+        if (pico.state.refresh_border > 0) {
+            if (drawBorderImage() != 0) {
+                printf("%s, unable to draw border image\n", __func__);
+            }
+
+            pico.state.refresh_border -= 1;
+        }
+    }
+    
     dst.w = m * srcrect->w;
     dst.h = m * srcrect->h;
     dst.x = (640 - dst.w) / 2;
     dst.y = (480 - dst.h) / 2;
     GFX_Copy(pixels, *srcrect, dst, pitch, 0, E_MI_GFX_ROTATE_180);
+    
     return 0;
 }
 
