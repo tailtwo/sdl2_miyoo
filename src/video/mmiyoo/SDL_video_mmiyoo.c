@@ -56,9 +56,6 @@
 #include "SDL_opengles_mmiyoo.h"
 #include "SDL_framebuffer_mmiyoo.h"
 
-#include "hex_pen.h"
-#include "scaler_neon.h"
-
 MMIYOO_VideoInfo MMiyooVideoInfo={0};
 extern MOON moon;
 
