@@ -924,7 +924,7 @@ S["LTLIBOBJS"]=" ${LIBOBJDIR}memcmp$U.lo ${LIBOBJDIR}strtod$U.lo"
 S["WAYLAND_SCANNER_CODE_MODE"]=""
 S["WAYLAND_SCANNER"]=""
 S["EXTRA_LDFLAGS"]=" -lm -L. -lEGL -lGLESv2 -lrt -lSDL2_image -lSDL2_ttf -ljson-c -ldl -lpthread -lrt -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneo"\
-"n_memcpy"
+"n"
 S["BUILD_LDFLAGS"]=" -Wl,--no-undefined"
 S["EXTRA_CFLAGS"]="-Iinclude -I/root/workspace/sdl2_miyoo/include -idirafter /root/workspace/sdl2_miyoo/src/video/khronos  -Wall -fno-strict-aliasing -fPIC -mcpu=corte"\
 "x-a7 -mfpu=neon-vfpv4 -O3 -I/opt/mmiyoo/arm-buildroot-linux-gnueabihf/sysroot/usr/include/SDL2 -fvisibility=hidden -Wdeclaration-after-statement -We"\
@@ -974,7 +974,7 @@ S["PKGCONFIG_LIBS_PRIV"]="\n"\
 "Libs.private:"
 S["SDL_RLD_FLAGS"]=""
 S["SDL_STATIC_LIBS"]=" -lm -L. -lEGL -lGLESv2 -lrt -lSDL2_image -lSDL2_ttf -ljson-c -ldl -lpthread -lrt -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneo"\
-"n_memcpy"
+"n"
 S["SDL_LIBS"]="-lSDL2"
 S["SDL_CFLAGS"]=" -D_REENTRANT"
 S["INSTALL_SDL2_CONFIG"]="TRUE"
@@ -1019,7 +1019,7 @@ S["LIBTOOLLINKERTAG"]="CC"
 S["LINKER"]="$(CC)"
 S["PKG_CONFIG_LIBDIR"]=""
 S["PKG_CONFIG_PATH"]=""
-S["PKG_CONFIG"]=""
+S["PKG_CONFIG"]="/opt/mmiyoo/bin/pkg-config"
 S["SET_MAKE"]=""
 S["INSTALL_DATA"]="${INSTALL} -m 644"
 S["INSTALL_SCRIPT"]="${INSTALL}"

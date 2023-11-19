@@ -2405,7 +2405,7 @@ CheckMMiyooAudio()
         have_audio=yes
         if test x$HOST = xarm-linux; then
             EXTRA_CFLAGS="$EXTRA_CFLAGS -DMMIYOO -mcpu=cortex-a7 -mfpu=neon-vfpv4 -O3"
-            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneon_memcpy"
+            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneon"
         fi
         SUMMARY_audio="${SUMMARY_audio} mmiyoo"
     fi

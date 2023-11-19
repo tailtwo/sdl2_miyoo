@@ -761,7 +761,7 @@ SDL_JoystickGetButton(SDL_Joystick *joystick, int button)
         state = joystick->buttons[button];
     }
     else {
-        // SDL_SetError("Joystick only has %d buttons", joystick->nbuttons); // we hit this and spam it in console which causes slowdowns.
+        SDL_SetError("Joystick only has %d buttons", joystick->nbuttons); // we hit this and spam it in console which causes slowdowns.
         state = 0;
     }
     return state;

@@ -30,6 +30,7 @@
 #include "SDL_rect_c.h"
 #include "../events/SDL_events_c.h"
 #include "../timer/SDL_timer_c.h"
+#include "neon.h"
 
 #include "SDL_syswm.h"
 
@@ -880,13 +881,13 @@ SDL_AddDisplayMode(SDL_VideoDisplay *display, const SDL_DisplayMode *mode)
 void
 SDL_SetCurrentDisplayMode(SDL_VideoDisplay *display, const SDL_DisplayMode *mode)
 {
-    SDL_memcpy(&display->current_mode, mode, sizeof(*mode));
+    neon_memcpy(&display->current_mode, mode, sizeof(*mode));
 }
 
 void
 SDL_SetDesktopDisplayMode(SDL_VideoDisplay *display, const SDL_DisplayMode *mode)
 {
-    SDL_memcpy(&display->desktop_mode, mode, sizeof(*mode));
+    neon_memcpy(&display->desktop_mode, mode, sizeof(*mode));
 }
 
 static int
@@ -2769,13 +2770,13 @@ SDL_SetWindowGammaRamp(SDL_Window *window, const Uint16 *red,
     }
 
     if(red) {
-        SDL_memcpy(&window->gamma[0 * 256], red, 256 * sizeof(Uint16));
+        neon_memcpy(&window->gamma[0 * 256], red, 256 * sizeof(Uint16));
     }
     if(green) {
-        SDL_memcpy(&window->gamma[1 * 256], green, 256 * sizeof(Uint16));
+        neon_memcpy(&window->gamma[1 * 256], green, 256 * sizeof(Uint16));
     }
     if(blue) {
-        SDL_memcpy(&window->gamma[2 * 256], blue, 256 * sizeof(Uint16));
+        neon_memcpy(&window->gamma[2 * 256], blue, 256 * sizeof(Uint16));
     }
     if(window->flags & SDL_WINDOW_INPUT_FOCUS) {
         return _this->SetWindowGammaRamp(_this, window, window->gamma);
@@ -2816,17 +2817,17 @@ SDL_GetWindowGammaRamp(SDL_Window *window, Uint16 *red,
                 window->gamma[2 * 256 + i] = value;
             }
         }
-        SDL_memcpy(window->saved_gamma, window->gamma, 3 * 256 * sizeof(Uint16));
+        neon_memcpy(window->saved_gamma, window->gamma, 3 * 256 * sizeof(Uint16));
     }
 
     if(red) {
-        SDL_memcpy(red, &window->gamma[0 * 256], 256 * sizeof(Uint16));
+        neon_memcpy(red, &window->gamma[0 * 256], 256 * sizeof(Uint16));
     }
     if(green) {
-        SDL_memcpy(green, &window->gamma[1 * 256], 256 * sizeof(Uint16));
+        neon_memcpy(green, &window->gamma[1 * 256], 256 * sizeof(Uint16));
     }
     if(blue) {
-        SDL_memcpy(blue, &window->gamma[2 * 256], 256 * sizeof(Uint16));
+        neon_memcpy(blue, &window->gamma[2 * 256], 256 * sizeof(Uint16));
     }
     return 0;
 }
@@ -2967,7 +2968,7 @@ SDL_SetWindowMouseRect(SDL_Window *window, const SDL_Rect *rect)
     CHECK_WINDOW_MAGIC(window, -1);
 
     if(rect) {
-        SDL_memcpy(&window->mouse_rect, rect, sizeof(*rect));
+        neon_memcpy(&window->mouse_rect, rect, sizeof(*rect));
     }
     else {
         SDL_zero(window->mouse_rect);
@@ -4397,7 +4398,7 @@ SDL_ShowMessageBox(const SDL_MessageBoxData *messageboxdata, int *buttonid)
         buttonid = &dummybutton;
     }
 
-    SDL_memcpy(&mbdata, messageboxdata, sizeof(*messageboxdata));
+    neon_memcpy(&mbdata, messageboxdata, sizeof(*messageboxdata));
     if(!mbdata.title) {
         mbdata.title = "";
     }

@@ -15,8 +15,8 @@ void picoSetAllDefaults() {
     pico.mouse.accelerationRate = MMIYOO_DEFAULT_ACCELERATION_RATE;
     pico.mouse.maxAcceleration = MMIYOO_DEFAULT_MAX_ACCELERATION;
     pico.mouse.incrementModifier = MMIYOO_DEFAULT_INCREMENT_MODIFIER;
-    pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
-    pico.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+    pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+    pico.perf.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
     pico.customkey.A = MMIYOO_DEFAULT_KEY_A;
     pico.customkey.B = MMIYOO_DEFAULT_KEY_B;
     pico.customkey.X = MMIYOO_DEFAULT_KEY_X;
@@ -32,27 +32,74 @@ void picoSetAllDefaults() {
     pico.customkey.Start = MMIYOO_DEFAULT_KEY_Start;
     pico.customkey.Select = MMIYOO_DEFAULT_KEY_Select;
     pico.customkey.Menu = MMIYOO_DEFAULT_KEY_MENU;
-    pico.current_border_id = DEFAULT_BORDER_ID;
+    pico.res.current_bezel_id = DEFAULT_BEZEL_ID;
+    
+    strncpy(pico.res.digit_path, DEFAULT_DIGIT_PATH, PATH_MAX);
+    pico.res.digit_path[PATH_MAX - 1] = '\0';
+    strncpy(pico.res.bezel_path, DEFAULT_BEZEL_PATH, PATH_MAX);
+    pico.res.bezel_path[PATH_MAX - 1] = '\0';
 }
 
-int cfgReadOverlay(struct json_object *jfile) {
-    struct json_object *joverlay = NULL;
+int cfgReadRes(struct json_object *jfile) {
+    struct json_object *jbezel = NULL;
     struct json_object *jval = NULL;
 
-    if (!json_object_object_get_ex(jfile, "overlay", &joverlay) || !joverlay) {
-        printf("Overlay settings not found in json file. Using defaults.\n");
-        pico.current_border_id = DEFAULT_BORDER_ID;
+    if (!json_object_object_get_ex(jfile, "bezel", &jbezel) || !jbezel) {
+        printf("bezel settings not found in json file. Using defaults.\n");
+        pico.res.current_bezel_id = DEFAULT_BEZEL_ID;
+        pico.res.current_integer_bezel_id = DEFAULT_INTEGER_BEZEL_ID; 
+        snprintf(pico.res.bezel_path, PATH_MAX, "%s", DEFAULT_BEZEL_PATH);
+        snprintf(pico.res.bezel_int_path, PATH_MAX, "%s", DEFAULT_INTEGER_BEZEL_PATH);
+        snprintf(pico.res.digit_path, PATH_MAX, "%s", DEFAULT_DIGIT_PATH);
         return 0;
     }
     
-    json_object_object_get_ex(joverlay, "current_overlay", &jval);
-    
+    json_object_object_get_ex(jbezel, "current_bezel", &jval);
     if (jval) {
-        pico.current_border_id = json_object_get_int(jval);
-        printf("[json] pico.current_border_id: %d\n", pico.current_border_id);
+        pico.res.current_bezel_id = json_object_get_int(jval);
+        printf("[json] pico.res.current_bezel_id: %d\n", pico.res.current_bezel_id);
     } else {
-        printf("pico.current_border_id not found in json file. Using default: %d.\n", DEFAULT_BORDER_ID);
-        pico.current_border_id = DEFAULT_BORDER_ID;
+        printf("pico.res.current_bezel_id not found in json file. Using default: %d.\n", DEFAULT_BEZEL_ID);
+        pico.res.current_bezel_id = DEFAULT_BEZEL_ID;
+    }
+
+    jval = NULL;
+    if (json_object_object_get_ex(jbezel, "bezel_path", &jval) && jval) {
+        const char *bezel_path = json_object_get_string(jval);
+        snprintf(pico.res.bezel_path, PATH_MAX, "%s", bezel_path);
+        printf("[json] pico.res.bezel_path: %s\n", pico.res.bezel_path);
+    } else {
+        printf("pico.res.bezel_path not found in json file. Using default: %s.\n", DEFAULT_BEZEL_PATH);
+        snprintf(pico.res.bezel_path, PATH_MAX, "%s", DEFAULT_BEZEL_PATH);
+    }
+
+    jval = NULL;
+    if (json_object_object_get_ex(jbezel, "digit_path", &jval) && jval) {
+        const char *digit_path = json_object_get_string(jval);
+        snprintf(pico.res.digit_path, PATH_MAX, "%s", digit_path);
+        printf("[json] pico.res.digit_path: %s\n", pico.res.digit_path);
+    } else {
+        printf("pico.res.digit_path not found in json file. Using default: %s.\n", DEFAULT_DIGIT_PATH);
+        snprintf(pico.res.digit_path, PATH_MAX, "%s", DEFAULT_DIGIT_PATH);
+    }
+
+    jval = NULL;
+    if (json_object_object_get_ex(jbezel, "bezel_int_path", &jval) && jval) {
+        const char *bezel_int_path = json_object_get_string(jval);
+        snprintf(pico.res.bezel_int_path, PATH_MAX, "%s", bezel_int_path);
+        printf("[json] pico.res.bezel_int_path: %s\n", pico.res.bezel_int_path);
+    } else {
+        printf("pico.res.bezel_int_path not found in json file. Using default: %s.\n", DEFAULT_INTEGER_BEZEL_PATH);
+        snprintf(pico.res.bezel_int_path, PATH_MAX, "%s", DEFAULT_INTEGER_BEZEL_PATH);
+    }
+    
+    jval = NULL;
+    if (json_object_object_get_ex(jbezel, "current_integer_bezel", &jval) && jval) {
+        pico.res.current_integer_bezel_id = json_object_get_int(jval);
+        printf("[json] pico.res.current_integer_bezel_id: %d\n", pico.res.current_integer_bezel_id);
+    } else {
+        printf("pico.res.current_integer_bezel_id not found in json file. Using default: %d.\n", DEFAULT_INTEGER_BEZEL_ID);
+        pico.res.current_integer_bezel_id = DEFAULT_INTEGER_BEZEL_ID;
     }
 
     return 0;
@@ -72,40 +119,47 @@ int cfgReadMouse(struct json_object *jfile) {
         json_object_object_get_ex(jval, "scaleFactor", &jScaleFactor);
         if (jScaleFactor) {
             pico.mouse.scaleFactor = json_object_get_int(jScaleFactor);
+            printf("[json] pico.mouse.scaleFactor: %d\n", pico.mouse.scaleFactor);
         } else {
             pico.mouse.scaleFactor = MMIYOO_DEFAULT_SCALE_FACTOR;
+            printf("scaleFactor not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_SCALE_FACTOR);
         }
-        
+
         json_object_object_get_ex(jval, "acceleration", &jAcceleration);
         if (jAcceleration) {
             pico.mouse.acceleration = json_object_get_double(jAcceleration);
+            printf("[json] pico.mouse.acceleration: %f\n", pico.mouse.acceleration);
         } else {
             pico.mouse.acceleration = MMIYOO_DEFAULT_ACCELERATION;
+            printf("acceleration not found in json file. Using default: %f.\n", MMIYOO_DEFAULT_ACCELERATION);
         }
 
         json_object_object_get_ex(jval, "accelerationRate", &jAccelerationRate);
         if (jAccelerationRate) {
             pico.mouse.accelerationRate = json_object_get_double(jAccelerationRate);
+            printf("[json] pico.mouse.accelerationRate: %f\n", pico.mouse.accelerationRate);
         } else {
             pico.mouse.accelerationRate = MMIYOO_DEFAULT_ACCELERATION_RATE;
+            printf("accelerationRate not found in json file. Using default: %f.\n", MMIYOO_DEFAULT_ACCELERATION_RATE);
         }
 
         json_object_object_get_ex(jval, "maxAcceleration", &jMaxAcceleration);
         if (jMaxAcceleration) {
             pico.mouse.maxAcceleration = json_object_get_double(jMaxAcceleration);
+            printf("[json] pico.mouse.maxAcceleration: %f\n", pico.mouse.maxAcceleration);
         } else {
             pico.mouse.maxAcceleration = MMIYOO_DEFAULT_MAX_ACCELERATION;
+            printf("maxAcceleration not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MAX_ACCELERATION);
         }
 
         json_object_object_get_ex(jval, "incrementModifier", &jIncrementModifier);
         if (jIncrementModifier) {
             pico.mouse.incrementModifier = json_object_get_int(jIncrementModifier);
+            printf("[json] pico.mouse.incrementModifier: %f\n", pico.mouse.incrementModifier);
         } else {
             pico.mouse.incrementModifier = MMIYOO_DEFAULT_INCREMENT_MODIFIER;
+            printf("incrementModifier not found in json file. Using default: %f.\n", MMIYOO_DEFAULT_INCREMENT_MODIFIER);
         }
-
-        printf("[json] Mouse settings: scaleFactor=%d, acceleration=%f, accelerationRate=%f, maxAcceleration=%f, incrementModifier=%f\n",
-               pico.mouse.scaleFactor, pico.mouse.acceleration, pico.mouse.accelerationRate, pico.mouse.maxAcceleration, pico.mouse.incrementModifier);
     } else {
         printf("Mouse settings not found in json file. Using defaults.\n");
         pico.mouse.scaleFactor = MMIYOO_DEFAULT_SCALE_FACTOR;
@@ -125,34 +179,63 @@ int cfgReadClock(struct json_object *jfile) {
         
     if (!json_object_object_get_ex(jfile, "performance", &jperf) || !jperf) {
         printf("Performance settings not found in json file. Using defaults.\n");
-        pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
-        pico.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+        pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+        pico.perf.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+        pico.perf.maxcpu = MMIYOO_MAX_CPU_CLOCK;
+        pico.perf.mincpu = MMIYOO_MIN_CPU_CLOCK;
         return 0;
     }
     
-    json_object_object_get_ex(jperf, "cpuclock", &jval);
+    json_object_object_get_ex(jperf, "maxcpu", &jval);
+    if (jval) {
+        pico.perf.maxcpu = json_object_get_int(jval);
+        if (pico.perf.maxcpu < pico.perf.mincpu) {
+            printf("Invalid maxcpu value. Using default: %d\n", pico.perf.maxcpu);
+            pico.perf.maxcpu = MMIYOO_MAX_CPU_CLOCK;
+        } else {
+            printf("[json] pico.perf.maxcpu: %d\n", pico.perf.maxcpu);
+        }
+    } else {
+        printf("maxcpu not found in json file. Using default: %d.\n", MMIYOO_MAX_CPU_CLOCK);
+        pico.perf.maxcpu = MMIYOO_MAX_CPU_CLOCK;
+    }
+
+    json_object_object_get_ex(jperf, "mincpu", &jval);
+    if (jval) {
+        pico.perf.mincpu = json_object_get_int(jval);
+        if (pico.perf.mincpu > pico.perf.maxcpu) {
+            printf("Invalid mincpu value. Using default: %d\n", pico.perf.mincpu);
+            pico.perf.mincpu = MMIYOO_MIN_CPU_CLOCK;
+        } else {
+            printf("[json] pico.perf.mincpu: %d\n", pico.perf.mincpu);
+        }
+    } else {
+        printf("mincpu not found in json file. Using default: %d.\n", MMIYOO_MIN_CPU_CLOCK);
+        pico.perf.mincpu = MMIYOO_MIN_CPU_CLOCK;
+    }
     
+    json_object_object_get_ex(jperf, "cpuclock", &jval);
     if (jval) {
         const char *cpuclock_str = json_object_get_string(jval);
         if (cpuclock_str) {
             int cpuclock = atoi(cpuclock_str);
-            if (cpuclock > MMIYOO_MAX_CPU_CLOCK) {
-                printf("[json] pico.cpuclock too high! Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK);
-                pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
-            } else if (cpuclock < MMIYOO_MIN_CPU_CLOCK) {
-                printf("[json] pico.cpuclock too low! Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK);
-                pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+            if (cpuclock > pico.perf.maxcpu) {
+                printf("[json] pico.perf.cpuclock too high! Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK);
+                pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+            } else if (cpuclock < pico.perf.mincpu) {
+                printf("[json] pico.perf.cpuclock too low! Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK);
+                pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
             } else {
-                printf("[json] pico.cpuclock: %d\n", cpuclock);
-                pico.cpuclock = cpuclock;
+                printf("[json] pico.perf.cpuclock: %d\n", cpuclock);
+                pico.perf.cpuclock = cpuclock;
             }
         } else {
-            printf("Invalid pico.cpuclock value. Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK);
-            pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+            printf("Invalid pico.perf.cpuclock value. Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK);
+            pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
         }
     } else {
-        printf("pico.cpuclock not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_CPU_CLOCK);
-        pico.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
+        printf("pico.perf.cpuclock not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_CPU_CLOCK);
+        pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
     }
 
     json_object_object_get_ex(jperf, "cpuclockincrement", &jval);
@@ -161,21 +244,21 @@ int cfgReadClock(struct json_object *jfile) {
         if (cpuclockincrement_str) {
             int cpuclockincrement = atoi(cpuclockincrement_str);
             if (cpuclockincrement > MMIYOO_MAX_CPU_CLOCK_INCREMENT) {
-                printf("[json] pico.cpuclockincrement too high! Using maximum allowed: 100\n");
-                pico.cpuclockincrement = MMIYOO_MAX_CPU_CLOCK_INCREMENT;
+                printf("[json] pico.perf.cpuclockincrement too high! Using maximum allowed: 100\n");
+                pico.perf.cpuclockincrement = MMIYOO_MAX_CPU_CLOCK_INCREMENT;
             } else {
-                printf("[json] pico.cpuclockincrement: %d\n", cpuclockincrement);
-                pico.cpuclockincrement = cpuclockincrement;
+                printf("[json] pico.perf.cpuclockincrement: %d\n", cpuclockincrement);
+                pico.perf.cpuclockincrement = cpuclockincrement;
             }
         } else {
-            printf("Invalid pico.cpuclockincrement value. Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT);
-            pico.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+            printf("Invalid pico.perf.cpuclockincrement value. Using default: %d\n", MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT);
+            pico.perf.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
         }
     } else {
-        printf("pico.cpuclockincrement not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT);
-        pico.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
+        printf("pico.perf.cpuclockincrement not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT);
+        pico.perf.cpuclockincrement = MMIYOO_DEFAULT_CPU_CLOCK_INCREMENT;
     }
-
+    
     return 0;
 }
 
@@ -302,25 +385,44 @@ int picoConfigRead(void)
     cfgReadCustomKeys(jfile);
     cfgReadClock(jfile);
     cfgReadMouse(jfile);
-    cfgReadOverlay(jfile);
+    cfgReadRes(jfile);
 
     json_object_put(jfile);
     return 0;
 }
 
+// this needs reworking so it doesn't write the max/min as they wont change at runtime
 int picoConfigWrite(void) {
     struct json_object *jfile = NULL;
     struct json_object *jmouse = NULL;
     struct json_object *jperformance = NULL;
-    struct json_object *joverlay = NULL;
+    struct json_object *jbezel = NULL;
 
     jfile = json_object_from_file(pico.cfg_path);
 
-    if (jfile == NULL) {
+    if (jfile == NULL) { // would the file REALLY disappear while the app is running ?
         jfile = json_object_new_object();
         if (jfile == NULL) {
             printf("Failed to create json object\n");
             return -1;
+        }
+    } else {
+        struct json_object *existingbezel = NULL;
+        struct json_object *existingPerformance = NULL;
+
+        if (json_object_object_get_ex(jfile, "bezel", &existingbezel)) {
+            jbezel = json_object_get(existingbezel);
+        }
+
+        if (json_object_object_get_ex(jfile, "performance", &existingPerformance)) {
+            struct json_object *maxCpu = NULL;
+            struct json_object *minCpu = NULL;
+            if (json_object_object_get_ex(existingPerformance, "maxcpu", &maxCpu) &&
+                json_object_object_get_ex(existingPerformance, "mincpu", &minCpu)) {
+                jperformance = json_object_new_object();
+                json_object_object_add(jperformance, "maxcpu", json_object_get(maxCpu));
+                json_object_object_add(jperformance, "mincpu", json_object_get(minCpu));
+            }
         }
     }
 
@@ -333,16 +435,22 @@ int picoConfigWrite(void) {
     json_object_object_add(jmouse, "incrementModifier", json_object_new_double(pico.mouse.incrementModifier));
     json_object_object_add(jfile, "mouse", jmouse);
 
-    // perf
+    // performance
     jperformance = json_object_new_object();
-    json_object_object_add(jperformance, "cpuclock", json_object_new_int(pico.cpuclock));
-    json_object_object_add(jperformance, "cpuclockincrement", json_object_new_int(pico.cpuclockincrement));
+    json_object_object_add(jperformance, "cpuclock", json_object_new_int(pico.perf.cpuclock));
+    json_object_object_add(jperformance, "cpuclockincrement", json_object_new_int(pico.perf.cpuclockincrement));
+    json_object_object_add(jperformance, "maxcpu", json_object_new_int(pico.perf.maxcpu));
+    json_object_object_add(jperformance, "mincpu", json_object_new_int(pico.perf.mincpu));
     json_object_object_add(jfile, "performance", jperformance);
 
-    // overlay
-    joverlay = json_object_new_object();
-    json_object_object_add(joverlay, "current_overlay", json_object_new_int(pico.current_border_id));
-    json_object_object_add(jfile, "overlay", joverlay);
+    // bezel
+    jbezel = json_object_new_object();
+    json_object_object_add(jbezel, "current_bezel", json_object_new_int(pico.res.current_bezel_id));
+    json_object_object_add(jbezel, "current_integer_bezel", json_object_new_int(pico.res.current_integer_bezel_id));
+    json_object_object_add(jbezel, "bezel_path", json_object_new_string(pico.res.bezel_path));
+    json_object_object_add(jbezel, "digit_path", json_object_new_string(pico.res.digit_path));
+    json_object_object_add(jbezel, "bezel_int_path", json_object_new_string(pico.res.bezel_int_path));
+    json_object_object_add(jfile, "bezel", jbezel);
 
     // write it then
     if (json_object_to_file_ext(pico.cfg_path, jfile, JSON_C_TO_STRING_PRETTY) != 0) {

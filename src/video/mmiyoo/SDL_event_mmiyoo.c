@@ -61,18 +61,87 @@ int r2Hold = 0;
 
 uint32_t hotkey = 0;
 
+static SDL_Scancode code[KEY_COUNT];
+
+void drawStateHandler(int action) {
+    switch (action) {
+        case 1:
+            pico.state.refresh_bezel = 8;
+            
+            if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
+                pico.state.draw_mouse = 8;
+            }
+            
+            break;
+        case 2:
+            pico.state.oc_changed = 8;
+            break;
+        case 3:
+            pico.state.draw_mouse = 8;
+            break;
+        case 4:
+            break;
+        default:
+            printf("error in drawStateHandler");
+            break;
+    }
+    pico.state.alpha_draw = 30;
+    pico.state.wait_frame = 30;
+    pico.state.push_update = 8;
+}
+
+void initializeKeyCodeArray() {
+    code[0] = pico.customkey.UpDpad;
+    code[1] = pico.customkey.DownDpad;
+    code[2] = pico.customkey.LeftDpad;
+    code[3] = pico.customkey.RightDpad;
+    code[4] = pico.customkey.A;
+    code[5] = pico.customkey.B;
+    code[6] = pico.customkey.X;
+    code[7] = pico.customkey.Y;
+    code[8] = pico.customkey.L1;
+    code[9] = pico.customkey.R1;
+    code[10] = pico.customkey.L2;
+    code[11] = pico.customkey.R2;
+    code[12] = pico.customkey.Select;
+    code[13] = pico.customkey.Start;
+    code[14] = pico.customkey.Menu;
+    code[15] = SDLK_HOME;
+    code[16] = SDLK_0;
+    code[17] = SDLK_1;
+}
+
+void resetInputStates() {
+    
+    uint32_t bitmap;
+   
+    bitmap = MMiyooEventInfo.keypad.bitmaps;
+    for (int key = 0; key <= MYKEY_LAST_BITS; key++) {
+        if (bitmap & (1 << key)) {
+            SDL_SendKeyboardKey(SDL_RELEASED, SDL_GetScancodeFromKey(code[key]));
+        }
+    }
+
+    MMiyooEventInfo.keypad.bitmaps = 0;
+
+    if (specialKey) {
+        SDL_SendKeyboardKey(SDL_RELEASED, specialKey);
+        specialKey = 0;
+    }
+}
+
 void updateClockOnEvent(int adjust) {
     int currentClock = get_cpuclock();
     int newclock = currentClock + adjust;
 
-    if (newclock > MMIYOO_MAX_CPU_CLOCK) {
-        // printf("Maximum Clock of %d MHz reached. Not increasing further.\n", MMIYOO_MAX_CPU_CLOCK);
-        newclock = MMIYOO_MAX_CPU_CLOCK;
+    if (newclock > pico.perf.maxcpu) {
+        // printf("Maximum Clock of %d MHz reached. Not increasing further.\n", pico.perf.maxcpu);
+        newclock = pico.perf.maxcpu;
     }
 
-    if (newclock < MMIYOO_MIN_CPU_CLOCK) {
-        // printf("Minimum Clock of %d MHz reached. Not decreasing further.\n", MMIYOO_MIN_CPU_CLOCK);
-        newclock = MMIYOO_MIN_CPU_CLOCK;
+    if (newclock < pico.perf.mincpu) {
+        // printf("Minimum Clock of %d MHz reached. Not decreasing further.\n", pico.perf.mincpu);
+        newclock = pico.perf.mincpu;
     }
 
     // printf("Current Clock: %d MHz\n", currentClock);
@@ -80,23 +149,26 @@ void updateClockOnEvent(int adjust) {
     if (currentClock != newclock) {
         // printf("Updating Clock to %d MHz\n", newclock);
         set_cpuclock(newclock);
-        pico.cpuclock = newclock;
-        pico.state.oc_changed = 4;
-        pico.state.push_update = 4;
+        pico.perf.cpuclock = newclock;
+        drawStateHandler(2);
     }
 }
 
-void updateBorderOnEvent() {
-    if (pico.current_border_id < 0) {
-        pico.current_border_id = 0;
-        // printf("Cannot scroll past 0\n");
-    } else if (pico.current_border_id >= pico.total_borders_loaded) {
-        pico.current_border_id = pico.total_borders_loaded - 1;
-        // printf("Cannot scroll past the last border\n");
+void updatebezelOnEvent(int direction) {
+    if (pico.state.integer_bezel) {
+        if (direction > 0) {
+            pico.res.current_integer_bezel_id = (pico.res.current_integer_bezel_id + 1) % pico.res.total_integer_bezels_loaded;
+        } else {
+            pico.res.current_integer_bezel_id = (pico.res.current_integer_bezel_id - 1 + pico.res.total_integer_bezels_loaded) % pico.res.total_integer_bezels_loaded;
+        }
     } else {
-        pico.state.push_update = 4;
-        pico.state.refresh_border = 4;
+        if (direction > 0) {
+            pico.res.current_bezel_id = (pico.res.current_bezel_id + 1) % pico.res.total_bezels_loaded;
+        } else {
+            pico.res.current_bezel_id = (pico.res.current_bezel_id - 1 + pico.res.total_bezels_loaded) % pico.res.total_bezels_loaded;
+        }
     }
+    drawStateHandler(1);
 }
 
 void sendSpecial() { // manage sending CTRL etc
@@ -143,12 +215,16 @@ void sendConsoleEscape() { // sends SPLORE when you're stuck in console. (doesn'
 void modeSwitch() { // toggle func for mouse/keypad mode
     MMiyooEventInfo.mode = (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) ? MMIYOO_KEYPAD_MODE : MMIYOO_MOUSE_MODE;
     if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
+        resetInputStates();
         MMiyooEventInfo.mouse.x = lastMouseX;
         MMiyooEventInfo.mouse.y = lastMouseY;
+        drawStateHandler(3);
         printf("Mode switched to MOUSE\n");
     } else {
+        resetInputStates();
         lastMouseX = MMiyooEventInfo.mouse.x;
         lastMouseY = MMiyooEventInfo.mouse.y;
+        drawStateHandler(1);
         printf("Mode switched to KEYPAD\n");
     }
 }
@@ -253,6 +329,7 @@ void MMIYOO_EventInit(void)
         return;
     }
 
+    initializeKeyCodeArray();
 
     dir = opendir("/mnt/SDCARD/.tmp_update");
     if (dir) {
@@ -283,15 +360,14 @@ int EventUpdate(void *data)
 
     while (running) { 
     
-        static int borderRedrawn = 0;  
+        static int bezelRedrawn = 0;  
 
         if (pico.state.oc_decay > 0) {
             pico.state.oc_decay--;
-            borderRedrawn = 0; 
-        } else if (!borderRedrawn) {
-            pico.state.refresh_border = 4;
-            pico.state.push_update = 4;
-            borderRedrawn = 1;
+            bezelRedrawn = 0; 
+        } else if (!bezelRedrawn) {
+            drawStateHandler(1);
+            bezelRedrawn = 1;
         }
         
         SDL_SemWait(event_sem);
@@ -344,6 +420,8 @@ int EventUpdate(void *data)
                     }
                                                             
                     hotkey = MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_SELECT);
+                    
+                    // refactor this, it's ugly
 
                     if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_MENU))) { // Quits
                         specialKey = SDL_SCANCODE_Q; 
@@ -354,19 +432,28 @@ int EventUpdate(void *data)
                         specialKey = SDL_SCANCODE_R; 
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L1);
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP))) { // overclock increase
-                        updateClockOnEvent(pico.cpuclockincrement);
+                        updateClockOnEvent(pico.perf.cpuclockincrement);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_UP);
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_DOWN))) { // overclock decrease
-                        updateClockOnEvent(-pico.cpuclockincrement);
+                        updateClockOnEvent(-pico.perf.cpuclockincrement);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_DOWN);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_LEFT))) { // border next
-                        pico.current_border_id = (pico.current_border_id + 1) % pico.total_borders_loaded;
-                        updateBorderOnEvent();
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_LEFT))) { // bezel next
+                        updatebezelOnEvent(-1);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_LEFT);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_RIGHT))) { // border previous
-                        pico.current_border_id = (pico.current_border_id - 1 + pico.total_borders_loaded) % pico.total_borders_loaded;
-                        updateBorderOnEvent();
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_RIGHT))) { // bezel previous
+                        updatebezelOnEvent(1);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_RIGHT);
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_R1))) { // change scaling
+                        pico.state.screen_scaling = (pico.state.screen_scaling % 3) + 1;
+
+                        if (pico.state.screen_scaling == 2) {
+                            pico.state.integer_bezel = 1;
+                        } else {
+                            pico.state.integer_bezel = 0;
+                        }
+
+                        drawStateHandler(1);
+                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_R1);
                     }
 
                 }
@@ -385,16 +472,7 @@ void MMIYOO_PumpEvents(_THIS)
 // Pause = Enter
 
 {
-    const SDL_Scancode code[]={
-        pico.customkey.UpDpad, pico.customkey.DownDpad, pico.customkey.LeftDpad, pico.customkey.RightDpad, // Up/Down/Left/Right 
-        pico.customkey.A, pico.customkey.B, pico.customkey.X, pico.customkey.Y, // A/B/X/Y
-        pico.customkey.L1, pico.customkey.R1, pico.customkey.L2, pico.customkey.R2,    // L1/R1/L2/R2
-        pico.customkey.Select,                           // Select 
-        pico.customkey.Start, pico.customkey.Menu, SDLK_HOME, 
-        SDLK_0, SDLK_1, SDLK_2, SDLK_3,
-        SDLK_HOME, SDLK_BACKSPACE 
-    };
-    
+   
     int updated = 0;
     int xDirection, yDirection;
     
@@ -440,6 +518,7 @@ void MMIYOO_PumpEvents(_THIS)
                     if ((v0 & 1) != (v1 & 1)) {
                         // printf("Special Key %d: %s\n", cc, (v1 & 1) ? "Pressed" : "Released");
                         SDL_SendKeyboardKey((v1 & 1) ? SDL_PRESSED : SDL_RELEASED, SDL_GetScancodeFromKey(code[cc]));
+                        pico.state.wait_frame = 30;
                     }
                 }
                 v0>>= 1;
@@ -477,6 +556,7 @@ void MMIYOO_PumpEvents(_THIS)
     
     SDL_SemPost(event_sem);
 }
+
 
 #endif
 

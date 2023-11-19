@@ -34,7 +34,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <sys/time.h>
 #include <time.h>
 #include <json-c/json.h>
 
@@ -76,100 +75,170 @@ int fileExists(const char *path) {
     return 0;
 }
 
+SDL_Surface* loadSurfaceWithAlpha(const char* path) {
+    SDL_Surface* loadedSurface;
+    SDL_Surface* optimizedSurface;
+    
+    loadedSurface = IMG_Load(path);
+    if (loadedSurface == NULL) {
+        fprintf(stderr, "Unable to load image %s! SDL_image Error: %s\n", path, IMG_GetError());
+        return NULL;
+    }
+    optimizedSurface = SDL_ConvertSurfaceFormat(loadedSurface, SDL_PIXELFORMAT_ARGB8888, 0);
+    if (!optimizedSurface) {
+        fprintf(stderr, "Unable to optimize image %s! SDL Error: %s\n", path, SDL_GetError());
+        SDL_FreeSurface(loadedSurface);
+        return NULL;
+    }
+
+    printf("Loaded and optimized image: %s\n", path);
+
+    SDL_SetSurfaceBlendMode(optimizedSurface, SDL_BLENDMODE_BLEND);
+    SDL_FreeSurface(loadedSurface);
+
+    return optimizedSurface;
+}
 int preloadResources() {
     char buf[255] = {0};
+    char mouse_icon_path[PATH_MAX];
     SDL_Surface *t = NULL;
-    SDL_Surface *tmp = SDL_CreateRGBSurface(0, 32, 32, 32, 0, 0, 0, 0);
-    
-    if (tmp) {
-        DIR *dir; 
-        struct dirent *ent;
-        int id = 0;
-        char filepath[PATH_MAX];
-        SDL_Surface *converted_surface;
-        pico.total_borders_loaded = 0;
+    int res;
+    DIR *dir;
+    struct dirent *ent;
+    int id = 0;
+    char filepath[PATH_MAX];
+    pico.res.total_bezels_loaded = 0;
+    pico.res.total_integer_bezels_loaded = 0;
 
-        if ((dir = opendir(BORDER_PATH)) != NULL) {
-            while ((ent = readdir(dir)) != NULL) {
-                if (ent->d_type == DT_DIR) continue;
-                snprintf(filepath, sizeof(filepath), "%s/%s", BORDER_PATH, ent->d_name);
-                t = IMG_Load(filepath);
-                if (t) {
-                    converted_surface = SDL_ConvertSurface(t, tmp->format, 0);
-                    SDL_FreeSurface(t);
-
-                    if (!converted_surface) {
-                        fprintf(stderr, "SDL_ConvertSurface failed: %s\n", SDL_GetError());
-                        return -1;
-                        continue;
-                    }
-
-                    if (strcmp(ent->d_name, "def_border.png") == 0) {
-                        pico.border[0] = converted_surface;
-                        printf("%s, default border loaded\n", __func__);
-                    } else {
-                        id++;
-                        pico.border[id] = converted_surface;
-                        printf("%s, %s loaded with ID %d\n", __func__, ent->d_name, id);
-                        pico.total_borders_loaded++;
-                    }
-                } else {
-                    fprintf(stderr, "IMG_Load failed: %s\n", SDL_GetError());
-                    return -2;
-                }
-            }
-            closedir(dir);
-        } else {
-            fprintf(stderr, "Could not open border directory: %s\n", BORDER_PATH);
-            return -3;
-        }
-
-        for (int cc = 0; cc <= 9; ++cc) {
-            sprintf(buf, "%s/%d.png", DIGIT_PATH, cc);
-            if (fileExists(buf)) {
-                t = IMG_Load(buf);
-                if (t) {
-                    pico.digit[cc] = SDL_ConvertSurface(t, tmp->format, 0);
-                    SDL_FreeSurface(t);
-                    printf("%s, %s loaded\n", __func__, buf);
-                } else {
-                    fprintf(stderr, "ERROR loading digit image: %s\n", buf);
-                    pico.digit[cc] = NULL;
-                    return -4;
-                }
-            } else {
-                fprintf(stderr, "ERROR digit image file does not exist: %s\n", buf);
-                pico.digit[cc] = NULL;
-                return -5;
-            }
-        }
-        SDL_FreeSurface(tmp);
-    } else {
-        fprintf(stderr, "ERROR creating RGB surface.\n");
+    // mouse icon
+    res = snprintf(mouse_icon_path, sizeof(mouse_icon_path), "%s", DEFAULT_MOUSE_ICON);
+    if (res < 0 || res >= sizeof(mouse_icon_path)) {
+        fprintf(stderr, "Failed to format mouse icon path, or it was truncated.\n");
+        return -6;
     }
+
+    pico.res.mouse_indicator = loadSurfaceWithAlpha(mouse_icon_path);
+    if (!pico.res.mouse_indicator) {
+        return -6;
+    }
+
+    // bezels
+    if ((dir = opendir(pico.res.bezel_path)) != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            if (ent->d_type == DT_DIR) continue;
+
+            res = snprintf(filepath, sizeof(filepath), "%s/%s", pico.res.bezel_path, ent->d_name);
+            if (res < 0 || res >= sizeof(filepath)) {
+                fprintf(stderr, "Failed to format or path was truncated for bezel path.\n");
+                closedir(dir);
+                return res < 0 ? -7 : -8;
+            }
+
+            t = loadSurfaceWithAlpha(filepath);
+            if (t) {
+                pico.res.bezel[id++] = t;
+                pico.res.total_bezels_loaded++;
+            } else {
+                fprintf(stderr, "Failed to load bezel image: %s\n", SDL_GetError());
+            }
+        }
+        closedir(dir);
+    }
+
+    // integer bezels
+    id = 0;
+    if ((dir = opendir(pico.res.bezel_int_path)) != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            if (ent->d_type == DT_DIR) continue;
+
+            res = snprintf(filepath, sizeof(filepath), "%s/%s", pico.res.bezel_int_path, ent->d_name);
+            if (res < 0 || res >= sizeof(filepath)) {
+                fprintf(stderr, "Failed to format or path was truncated for integer bezel path.\n");
+                closedir(dir);
+                return res < 0 ? -7 : -8;
+            }
+
+            t = loadSurfaceWithAlpha(filepath);
+            if (t) {
+                pico.res.integer_bezel[id++] = t;
+                pico.res.total_integer_bezels_loaded++;
+            } else {
+                fprintf(stderr, "Failed to load integer bezel image: %s\n", SDL_GetError());
+            }
+        }
+        closedir(dir);
+    }
+
+    // digits
+    for (int cc = 0; cc <= 9; ++cc) {
+        res = snprintf(buf, sizeof(buf), "%s/%d.png", pico.res.digit_path, cc);
+        if (res < 0 || res >= sizeof(buf)) {
+            fprintf(stderr, "Failed to format or path was truncated for digit path.\n");
+            return res < 0 ? -4 : -5;
+        }
+
+        t = loadSurfaceWithAlpha(buf);
+        if (t) {
+            pico.res.digit[cc] = t;
+        } else {
+            fprintf(stderr, "Failed to load digit image: %s\n", buf);
+        }
+    }
+
     return 0;
 }
 
-int drawBorderImage()
-{
+int drawMouseIcon() {
     SDL_Rect srt = {0};
     SDL_Rect drt = {0};
-    SDL_Surface* border_surface;
+    SDL_Surface* mouse_icon_surface;
 
-    int border_id = pico.current_border_id;
-    border_surface = pico.border[border_id];
+    mouse_icon_surface = pico.res.mouse_indicator;
 
-    if (border_id < 0 || border_id >= MAX_BORDERS || !pico.border[border_id]) {
-        printf("ERROR, no border image set for ID %d\n", border_id);
-        pico.state.refresh_border = 0;
+    if (!mouse_icon_surface) {
+        fprintf(stderr, "ERROR, mouse icon image not set.\n");
         return 1;
     }
 
-    srt = (SDL_Rect){0, 0, border_surface->w, border_surface->h};
-    drt = (SDL_Rect){0, 0, border_surface->w, border_surface->h};
+    srt = (SDL_Rect){0, 0, mouse_icon_surface->w, mouse_icon_surface->h};
+    drt = (SDL_Rect){0, 0, mouse_icon_surface->w, mouse_icon_surface->h};
 
-    GFX_Copy(border_surface->pixels, srt, drt, border_surface->pitch, 0, E_MI_GFX_ROTATE_180);
-    printf("%s, border %d drawn\n", __func__, border_id);
+    GFX_Copy(mouse_icon_surface->pixels, srt, drt, mouse_icon_surface->pitch, 0, E_MI_GFX_ROTATE_180);
+
+    return 0;
+}
+
+int drawbezelImage()
+{
+    SDL_Rect srt = {0};
+    SDL_Rect drt = {0};
+    SDL_Surface* bezel_surface;
+    int bezel_id;
+
+    if (pico.state.integer_bezel == 1) {
+        bezel_id = pico.res.current_integer_bezel_id;
+        if (bezel_id < 0 || bezel_id >= MAX_BEZELS || !pico.res.integer_bezel[bezel_id]) {
+            printf("ERROR, no integer bezel image set for ID %d\n", bezel_id);
+            pico.state.refresh_bezel = 0;
+            return 1;
+        }
+        bezel_surface = pico.res.integer_bezel[bezel_id];
+    } else {
+        bezel_id = pico.res.current_bezel_id;
+        if (bezel_id < 0 || bezel_id >= MAX_BEZELS || !pico.res.bezel[bezel_id]) {
+            printf("ERROR, no bezel image set for ID %d\n", bezel_id);
+            pico.state.refresh_bezel = 0;
+            return 1;
+        }
+        bezel_surface = pico.res.bezel[bezel_id];
+    }
+
+    srt = (SDL_Rect){0, 0, bezel_surface->w, bezel_surface->h};
+    drt = (SDL_Rect){0, 0, bezel_surface->w, bezel_surface->h};
+
+    GFX_Copy(bezel_surface->pixels, srt, drt, bezel_surface->pitch, 0, E_MI_GFX_ROTATE_180);
+
+    // printf("%s, bezel %d drawn\n", __func__, bezel_id);
 
     return 0;
 }
@@ -186,7 +255,7 @@ int drawCPUClock(int val, int num)
     }
 
     for (int cc = 0; cc < num; cc++) {
-        p = pico.digit[0];
+        p = pico.res.digit[0];
 
         if (!p) {
             fprintf(stderr, "ERROR, digit image not set for value 0\n");
@@ -200,12 +269,11 @@ int drawCPUClock(int val, int num)
         GFX_Copy(p->pixels, srt, drt, p->pitch, 0, E_MI_GFX_ROTATE_180);
     }
 
-    // Now draw the actual number, right to left
     for (int cc = num - 1; cc >= 0 && val > 0; cc--) {
         int digit = val % 10;
         val /= 10;
 
-        p = pico.digit[digit];
+        p = pico.res.digit[digit];
         if (!p) {
             fprintf(stderr, "ERROR, digit image not set for value %d\n", digit);
             pico.state.oc_changed = 0;
@@ -219,7 +287,7 @@ int drawCPUClock(int val, int num)
     }
 
     pico.state.oc_decay = 250;
-    printf("%s, clock drawn\n", __func__);
+    // printf("%s, clock drawn\n", __func__);
     return 0;
 }
 
@@ -286,7 +354,7 @@ int set_cpuclock(uint32_t newclock)
 
     pll_map = mmap(0, PLL_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd_mem, BASE_REG_MPLL_PA);
     if (pll_map) {
-        printf("Set cpuclock %dMHz\n", newclock);
+        // printf("Set cpuclock %dMHz\n", newclock);
 
         newclock*= 1000;
         sprintf(clockstr, "%d", newclock);
@@ -345,8 +413,13 @@ int set_cpuclock(uint32_t newclock)
     return 0;
 }
 
+void sigHandler(int signum);
+
 void GFX_Init(void)
 {
+    signal(SIGTERM, sigHandler);
+    signal(SIGINT, sigHandler);
+    
     MI_SYS_Init();
     MI_GFX_Open();
 
@@ -396,13 +469,8 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     if (pixels == NULL) {
         return -1;
     }
-    neon_memcpy(gfx.tmp.virAddr, pixels, srcrect.h * pitch);
     
-    gfx.hw.opt.u32GlobalSrcConstColor = 0;
-    gfx.hw.opt.eRotate = rotate;
-    gfx.hw.opt.eSrcDfbBldOp = E_MI_GFX_DFB_BLD_ONE;
-    gfx.hw.opt.eDstDfbBldOp = 0;
-    gfx.hw.opt.eDFBBlendFlag = 0;
+    neon_memcpy(gfx.tmp.virAddr, pixels, srcrect.h * pitch);
 
     gfx.hw.src.rt.s32Xpos = srcrect.x;
     gfx.hw.src.rt.s32Ypos = srcrect.y;
@@ -413,11 +481,7 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     gfx.hw.src.surf.u32Stride = pitch;
     gfx.hw.src.surf.eColorFmt = (pitch / srcrect.w) == 2 ? E_MI_GFX_FMT_RGB565 : E_MI_GFX_FMT_ARGB8888;
     gfx.hw.src.surf.phyAddr = gfx.tmp.phyAddr;
-    
-    gfx.hw.dst.rt.s32Xpos = 0;
-    gfx.hw.dst.rt.s32Ypos = 0;
-    gfx.hw.dst.rt.u32Width = FB_W;
-    gfx.hw.dst.rt.u32Height = FB_H;
+
     gfx.hw.dst.rt.s32Xpos = dstrect.x;
     gfx.hw.dst.rt.s32Ypos = dstrect.y;
     gfx.hw.dst.rt.u32Width = dstrect.w;
@@ -428,13 +492,31 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     gfx.hw.dst.surf.eColorFmt = E_MI_GFX_FMT_ARGB8888;
     gfx.hw.dst.surf.phyAddr = gfx.fb.phyAddr + (FB_W * gfx.vinfo.yoffset * FB_BPP);
 
+    if (pico.state.alpha_draw > 0) { // should really use the functions alpha value
+        gfx.hw.opt.u32GlobalSrcConstColor = 0xff000000;
+        gfx.hw.opt.eRotate = rotate;
+        gfx.hw.opt.eSrcDfbBldOp = E_MI_GFX_DFB_BLD_ONE;
+        gfx.hw.opt.eDstDfbBldOp = E_MI_GFX_DFB_BLD_INVSRCALPHA;
+        gfx.hw.opt.eDFBBlendFlag = E_MI_GFX_DFB_BLEND_SRC_PREMULTIPLY | E_MI_GFX_DFB_BLEND_COLORALPHA | E_MI_GFX_DFB_BLEND_ALPHACHANNEL;
+        pico.state.alpha_draw -= 1;
+    } else {
+        gfx.hw.opt.u32GlobalSrcConstColor = 0;
+        gfx.hw.opt.eRotate = rotate;
+        gfx.hw.opt.eSrcDfbBldOp = E_MI_GFX_DFB_BLD_ONE;
+        gfx.hw.opt.eDstDfbBldOp = 0;
+        gfx.hw.opt.eDFBBlendFlag = 0;
+    }
+    
     MI_SYS_FlushInvCache(gfx.tmp.virAddr, pitch * srcrect.h);
     MI_GFX_BitBlit(&gfx.hw.src.surf, &gfx.hw.src.rt, &gfx.hw.dst.surf, &gfx.hw.dst.rt, &gfx.hw.opt, &u16Fence);
-    MI_GFX_WaitAllDone(FALSE, u16Fence);
+    
+    if (pico.state.wait_frame > 0) { // only wait when there's input
+        MI_GFX_WaitAllDone(FALSE, u16Fence);
+        pico.state.wait_frame -= 1;
+    }
     
     return 0;
 }
-
 
 void GFX_Flip(void)
 {
@@ -462,8 +544,7 @@ int MMIYOO_CreateWindow(_THIS, SDL_Window *window)
     MMiyooVideoInfo.window = window;
     printf("%s, w:%d, h:%d\n", __func__, window->w, window->h);
     //glUpdateBufferSettings(fb_flip, &fb_idx, fb_vaddr);
-    pico.state.push_update = 4;
-    pico.state.refresh_border = 4;
+    drawStateHandler(1);
     return 0;
 }
 
@@ -524,7 +605,6 @@ VideoBootStrap MMIYOO_bootstrap = {MMIYOO_DRIVER_NAME, "MMIYOO VIDEO DRIVER", MM
 int MMIYOO_VideoInit(_THIS)
 {
 
-    int result;
     SDL_DisplayMode mode={0};
     SDL_VideoDisplay display={0};
 
@@ -602,31 +682,11 @@ int MMIYOO_VideoInit(_THIS)
     GFX_Init();
     picoConfigRead();
     get_cpuclock();
-    set_cpuclock(pico.cpuclock);
+    set_cpuclock(pico.perf.cpuclock);
     MMIYOO_EventInit();
         
-    result = preloadResources();
-    if (result != 0) {
-        switch (result) {
-            case -1:
-                fprintf(stderr, "Error: Failed to create RGB surface.\n");
-                break;
-            case -2:
-                fprintf(stderr, "Error: Could not open border directory.\n");
-                break;
-            case -3:
-                fprintf(stderr, "Error: Failed to load an image.\n");
-                break;
-            case -4:
-                fprintf(stderr, "ERROR loading digit image\n");
-                break;
-            case -5:
-                fprintf(stderr, "ERROR digit image file does not exist\n");
-                break;
-            default:
-                fprintf(stderr, "An unknown error occurred.\n");
-        }
-    }
+    preloadResources();
+
     return 0;
 }
 
@@ -642,21 +702,30 @@ void MMIYOO_VideoQuit(_THIS)
     picoConfigWrite();
     
     for (cc=0; cc<=9; cc++) { // dealloc the digit icons
-        if (pico.digit[cc]) {
-            SDL_FreeSurface(pico.digit[cc]);
-            pico.digit[cc] = NULL;
+        if (pico.res.digit[cc]) {
+            SDL_FreeSurface(pico.res.digit[cc]);
+            pico.res.digit[cc] = NULL;
         }
     }
     
-    for (int id = 0; id < pico.total_borders_loaded; id++) { // dealloc the borders
-        if (pico.border[id]) {
-            SDL_FreeSurface(pico.border[id]);
-            pico.border[id] = NULL;
+    for (int id = 0; id < pico.res.total_bezels_loaded; id++) { // dealloc the bezels
+        if (pico.res.bezel[id]) {
+            SDL_FreeSurface(pico.res.bezel[id]);
+            pico.res.bezel[id] = NULL;
         }
     }
     
     GFX_Quit();
     MMIYOO_EventDeinit();
+}
+
+void sigHandler(int signum) { 
+    // gracefully exit on a SIG so we can always call the quit, some apps blackscreen if mi_gfx doesn't exit correctly
+    if (signum == SIGTERM || signum == SIGINT) {
+        GFX_Quit();
+        MMIYOO_EventDeinit();
+        exit(signum);
+    }
 }
 
 #endif

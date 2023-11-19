@@ -50,7 +50,7 @@ typedef struct {
 
 #define MAX_TEXTURE 10
 
-struct _NDS_TEXTURE {
+struct _PICO_TEXTURE {
     int pitch;
     const void *pixels;
     SDL_Texture *texture;
@@ -59,17 +59,17 @@ struct _NDS_TEXTURE {
 extern MMIYOO_EventInfo MMiyooEventInfo;
 extern PICO pico;
 
-static struct _NDS_TEXTURE ntex[MAX_TEXTURE] = {0};
+static struct _PICO_TEXTURE ptex[MAX_TEXTURE] = {0};
 
 static int update_texture(void *chk, void *new, const void *pixels, int pitch)
 {
     int cc = 0;
 
     for (cc=0; cc<MAX_TEXTURE; cc++) {
-        if (ntex[cc].texture == chk) {
-            ntex[cc].texture = new;
-            ntex[cc].pixels = pixels;
-            ntex[cc].pitch = pitch;
+        if (ptex[cc].texture == chk) {
+            ptex[cc].texture = new;
+            ptex[cc].pixels = pixels;
+            ptex[cc].pitch = pitch;
             return cc;
         }
     }
@@ -81,8 +81,8 @@ static const void* get_pixels(void *chk)
     int cc = 0;
 
     for (cc=0; cc<MAX_TEXTURE; cc++) {
-        if (ntex[cc].texture == chk) {
-            return ntex[cc].pixels;
+        if (ptex[cc].texture == chk) {
+            return ptex[cc].pixels;
         }
     }
     return NULL;
@@ -93,8 +93,8 @@ static int get_pitch(void *chk)
     int cc = 0;
 
     for (cc=0; cc<MAX_TEXTURE; cc++) {
-        if (ntex[cc].texture == chk) {
-            return ntex[cc].pitch;
+        if (ptex[cc].texture == chk) {
+            return ptex[cc].pitch;
         }
     }
     return -1;
@@ -210,10 +210,9 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
     const void *pixels = NULL;
     static int show_digit_val = 0;
     static int show_digit_num = 0;
+   
+    float m = (640.0 / srcrect->w < 480.0 / srcrect->h) ? 640.0 / srcrect->w : 480.0 / srcrect->h;
 
-    float sx = 640.0 / srcrect->w;
-    float sy = 480.0 / srcrect->h;
-    float m = sx < sy ? sx : sy;
     pitch = get_pitch(texture);
     pixels = get_pixels(texture);
     
@@ -221,6 +220,8 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
         return 0;
     }
     
+     // printf("srcrect: x=%d, y=%d, w=%d, h=%d\n", srcrect->x, srcrect->y, srcrect->w, srcrect->h);
+     
     if (pico.state.push_update > 0) {  
         pico.state.push_update -= 1;
 
@@ -233,19 +234,46 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
             pico.state.oc_changed -= 1;
         }
 
-        if (pico.state.refresh_border > 0) {
-            if (drawBorderImage() != 0) {
-                printf("%s, unable to draw border image\n", __func__);
+        if (pico.state.refresh_bezel > 0) {
+            if (drawbezelImage() != 0) {
+                printf("%s, unable to draw bezel image\n", __func__);
             }
 
-            pico.state.refresh_border -= 1;
+            pico.state.refresh_bezel -= 1;
+        }
+        
+        if (pico.state.draw_mouse > 0) {
+            if (drawMouseIcon() != 0) {
+                printf("%s, unable to draw mouse image\n", __func__);
+            }
+            
+            pico.state.draw_mouse -= 1;
         }
     }
     
-    dst.w = m * srcrect->w;
-    dst.h = m * srcrect->h;
-    dst.x = (640 - dst.w) / 2;
-    dst.y = (480 - dst.h) / 2;
+    switch (pico.state.screen_scaling) {
+        case 1:
+            dst.w = 640;
+            dst.h = 480;
+            dst.x = 0;
+            dst.y = 0;
+            break;
+        case 2: 
+            dst.w = srcrect->w;
+            dst.h = srcrect->h;
+            break;
+        case 3:
+        default:
+            dst.w = m * srcrect->w;
+            dst.h = m * srcrect->h;
+            break;
+    }
+    
+    if (pico.state.screen_scaling != 1) {
+        dst.x = (640 - dst.w) / 2;
+        dst.y = (480 - dst.h) / 2;
+    }
+    
     GFX_Copy(pixels, *srcrect, dst, pitch, 0, E_MI_GFX_ROTATE_180);
     
     return 0;

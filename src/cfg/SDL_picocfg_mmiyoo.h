@@ -1,6 +1,7 @@
 #ifndef __SDL_PICOCFG_MMIYOO_H__
 #define __SDL_PICOCFG_MMIYOO_H__
 
+#include <limits.h>
 #include <SDL2/SDL.h>
 #include "../../cfg/SDL_picocfg_mmiyoo.h"
 
@@ -9,7 +10,7 @@
 #endif
 
 #define PICO_CFG_PATH                    "cfg/onioncfg.json"
-
+#define BUFFER_SIZE PATH_MAX + 20
 #define MMIYOO_DEFAULT_KEY_L2 SDLK_d
 #define MMIYOO_DEFAULT_KEY_L1 SDLK_d
 #define MMIYOO_DEFAULT_KEY_UpDpad SDLK_UP
@@ -35,13 +36,13 @@
 #define MMIYOO_DEFAULT_ACCELERATION_RATE 1.5
 #define MMIYOO_DEFAULT_MAX_ACCELERATION 5
 #define MMIYOO_DEFAULT_INCREMENT_MODIFIER 0.1
-#define DIGIT_PATH "res/digit"
-#define BORDER_PATH "res/border"
-#define MAX_BORDERS 256
-#define DEFAULT_BORDER_IMAGE "res/border/def_border.png"
-#define DEFAULT_BORDER_ID 0
-#define PICO_WINDOW_W 320
-#define PICO_WINDOW_H 240
+#define DEFAULT_DIGIT_PATH "res/digit"
+#define DEFAULT_BEZEL_PATH "res/bezel/standard/"
+#define DEFAULT_INTEGER_BEZEL_PATH "res/bezel/integer_scaled/"
+#define DEFAULT_BEZEL_ID 0
+#define DEFAULT_INTEGER_BEZEL_ID 0
+#define MAX_BEZELS 256
+#define DEFAULT_MOUSE_ICON "res/icon/mouse.png"
 
 SDL_Keycode stringToKeycode(const char *keyString);
 int picoConfigRead(void);
@@ -63,21 +64,42 @@ typedef struct _STATE {
     int oc_changed;
     int oc_decay;
     int push_update;
-    int refresh_border;
+    int refresh_bezel;
+    int draw_mouse;
+    int screen_scaling;
+    int alpha_draw;
+    int integer_bezel;
+    int wait_frame;
 } STATE;
 
-typedef struct _PICO {
+typedef struct _PERF {
     int cpuclock;
     int cpuclockincrement;
+    int maxcpu;
+    int mincpu;
+} PERF;
+
+typedef struct _RES {
+    SDL_Surface *bezel[MAX_BEZELS];
+    SDL_Surface *integer_bezel[MAX_BEZELS];
+    SDL_Surface *digit[10];
+    SDL_Surface *mouse_indicator;
+    int current_bezel_id;
+    int current_integer_bezel_id;
+    int total_bezels_loaded;
+    int total_integer_bezels_loaded;
+    char digit_path[PATH_MAX];
+    char bezel_path[PATH_MAX];
+    char bezel_int_path[PATH_MAX];
+} RES;
+
+typedef struct _PICO {
     char cfg_path[MAX_PATH];
     CUSTKEY customkey;
     MOUSE mouse;
     STATE state;
-    SDL_Surface *digit[10];
-    SDL_Surface *border[MAX_BORDERS];
-    int current_border_id;
-    int total_borders_loaded;
+    RES res;
+    PERF perf;
 } PICO;
-
 
 #endif

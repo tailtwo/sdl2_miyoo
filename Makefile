@@ -23,7 +23,7 @@ INCLUDE = -Iinclude -I/root/workspace/sdl2_miyoo/include -idirafter /root/worksp
 CFLAGS  = -g -O3 -DUSING_GENERATED_CONFIG_H
 EXTRA_CFLAGS = -Iinclude -I/root/workspace/sdl2_miyoo/include -idirafter /root/workspace/sdl2_miyoo/src/video/khronos  -Wall -fno-strict-aliasing -fPIC -mcpu=cortex-a7 -mfpu=neon-vfpv4 -O3 -I/opt/mmiyoo/arm-buildroot-linux-gnueabihf/sysroot/usr/include/SDL2 -fvisibility=hidden -Wdeclaration-after-statement -Werror=declaration-after-statement -DMESA_EGL_NO_X11_HEADERS -DEGL_NO_X11 -D_REENTRANT -DHAVE_LINUX_VERSION_H -DMMIYOO -mcpu=cortex-a7 -mfpu=neon-vfpv4 -O3
 LDFLAGS =  -Wl,--no-undefined
-EXTRA_LDFLAGS =  -lm -L. -lEGL -lGLESv2 -lrt -lSDL2_image -lSDL2_ttf -ljson-c -ldl -lpthread -lrt -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneon_memcpy
+EXTRA_LDFLAGS =  -lm -L. -lEGL -lGLESv2 -lrt -lSDL2_image -lSDL2_ttf -ljson-c -ldl -lpthread -lrt -Lmmiyoo/libs -lmi_ao -lshmvar -lmi_common -lmi_sys -lmi_gfx -lneon
 LIBTOOL = $(SHELL) $(top_builddir)/libtool
 INSTALL = /usr/bin/install -c
 AR	= /opt/mmiyoo/bin/arm-linux-gnueabihf-ar

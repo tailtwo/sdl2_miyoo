@@ -27,6 +27,7 @@
 #include "../../SDL_internal.h"
 #include "SDL_event_mmiyoo.h"
 
+#define KEY_COUNT           18
 #define MYKEY_UP            0
 #define MYKEY_DOWN          1
 #define MYKEY_LEFT          2
@@ -75,6 +76,7 @@ typedef struct _MMIYOO_EventInfo {
 extern void MMIYOO_EventInit(void);
 extern void MMIYOO_EventDeinit(void);
 extern void MMIYOO_PumpEvents(_THIS);
+void drawStateHandler(int action);
 
 #endif
 
