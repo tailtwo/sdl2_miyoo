@@ -43,7 +43,6 @@
 
 MMIYOO_EventInfo MMiyooEventInfo = {0};
 
-extern NDS nds;
 extern MOON moon;
 extern MMIYOO_VideoInfo MMiyooVideoInfo;
 
@@ -287,8 +286,8 @@ int EventUpdate(void *data)
                                                             
                     if (hotkeyEnable) {
                         hotkey = MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_SELECT);
-                        printf("Hotkey is enabled.\n");
-                        printf("Current hotkey state: %d\n", hotkey);
+                        // printf("Hotkey is enabled.\n");
+                        // printf("Current hotkey state: %d\n", hotkey);
                     } else {
                         if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_START)) {
                             modeSwitchKeypad();

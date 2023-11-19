@@ -215,7 +215,7 @@ int read_moonlight_config(void)
     return 0;
 }
 
-int write_moonlight_config(void) // not used
+int write_moonlight_config(void)
 {
     struct json_object *jfile = NULL;
 
