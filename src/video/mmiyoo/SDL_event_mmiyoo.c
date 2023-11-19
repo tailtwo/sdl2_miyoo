@@ -406,6 +406,7 @@ int EventUpdate(void *data)
                         case 97:  bit = (1 << MYKEY_SELECT);  break;
                         case 1:   bit = (1 << MYKEY_MENU);    break;
                         case 116: bit = (1 << MYKEY_POWER);   break;
+                        case 114: bit = (1 << MYKEY_VOLDOWN); break;
                         case 115: bit = (1 << MYKEY_VOLUP);
                     }
                     
