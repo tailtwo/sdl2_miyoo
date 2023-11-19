@@ -70,6 +70,8 @@ typedef struct _STATE {
     int alpha_draw;
     int integer_bezel;
     int wait_frame;
+    int lastMouseX;
+    int lastMouseY;
 } STATE;
 
 typedef struct _PERF {

@@ -262,7 +262,7 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
             dst.w = srcrect->w;
             dst.h = srcrect->h;
             break;
-        case 3:
+        case 3: // just fall through
         default:
             dst.w = m * srcrect->w;
             dst.h = m * srcrect->h;

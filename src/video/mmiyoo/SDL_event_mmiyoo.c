@@ -51,8 +51,6 @@ static int is_stock_system = 0;
 static SDL_sem *event_sem = NULL;
 static SDL_Thread *thread = NULL;
 static uint32_t pre_keypad_bitmaps = 0;
-static int lastMouseX = 160;
-static int lastMouseY = 120;
 int volume_inc(void);
 int volume_dec(void);
 
@@ -154,7 +152,7 @@ void updateClockOnEvent(int adjust) {
     }
 }
 
-void updatebezelOnEvent(int direction) {
+void updateBezelOnEvent(int direction) {
     if (pico.state.integer_bezel) {
         if (direction > 0) {
             pico.res.current_integer_bezel_id = (pico.res.current_integer_bezel_id + 1) % pico.res.total_integer_bezels_loaded;
@@ -183,47 +181,18 @@ void sendSpecial() { // manage sending CTRL etc
     }
 }
 
-bool sendKey(SDL_Scancode scancode) { // used for the below splore function but again, doesn't work yet
-    if (SDL_SendKeyboardKey(SDL_PRESSED, scancode) < 0) {
-        fprintf(stderr, "Error pressing key: %s\n", SDL_GetError());
-        return false;
-    }
-    SDL_Delay(10);
-    if (SDL_SendKeyboardKey(SDL_RELEASED, scancode) < 0) {
-        fprintf(stderr, "Error releasing key: %s\n", SDL_GetError());
-        return false;
-    }
-    SDL_Delay(10);
-    return true;
-}
-
-void sendConsoleEscape() { // sends SPLORE when you're stuck in console. (doesn't send for some strange reason)
-    SDL_Scancode keys[] = {
-        SDL_SCANCODE_S, SDL_SCANCODE_P, SDL_SCANCODE_L, 
-        SDL_SCANCODE_O, SDL_SCANCODE_R, SDL_SCANCODE_E, 
-        SDL_SCANCODE_RETURN
-    };
-
-    for (size_t i = 0; i < sizeof(keys)/sizeof(keys[0]); ++i) {
-        if (!sendKey(keys[i])) {
-            fprintf(stderr, "Failed to send key: %d\n", keys[i]);
-            return;
-        }
-    }
-}
-
 void modeSwitch() { // toggle func for mouse/keypad mode
     MMiyooEventInfo.mode = (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) ? MMIYOO_KEYPAD_MODE : MMIYOO_MOUSE_MODE;
     if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
         resetInputStates();
-        MMiyooEventInfo.mouse.x = lastMouseX;
-        MMiyooEventInfo.mouse.y = lastMouseY;
+        MMiyooEventInfo.mouse.x = pico.state.lastMouseX;
+        MMiyooEventInfo.mouse.y = pico.state.lastMouseY;
         drawStateHandler(3);
         printf("Mode switched to MOUSE\n");
     } else {
         resetInputStates();
-        lastMouseX = MMiyooEventInfo.mouse.x;
-        lastMouseY = MMiyooEventInfo.mouse.y;
+        pico.state.lastMouseX = MMiyooEventInfo.mouse.x;
+        pico.state.lastMouseY = MMiyooEventInfo.mouse.y;
         drawStateHandler(1);
         printf("Mode switched to KEYPAD\n");
     }
@@ -291,6 +260,36 @@ void updateMousePosition(int xDirection, int yDirection) {
     // printf("Updated X-coordinate: %d, Y-coordinate: %d\n", MMiyooEventInfo.mouse.x, MMiyooEventInfo.mouse.y);
 }
 
+// void processHotkeys(uint32_t keyBitmaps) {
+    // if (!(keyBitmaps & (1 << MYKEY_SELECT))) {
+        // return;
+    // }
+
+    // if (keyBitmaps & (1 << MYKEY_MENU)) {
+        // specialKey = SDL_SCANCODE_Q; 
+        // running = 0; // Quit
+    // } else if (keyBitmaps & (1 << MYKEY_L1)) {
+        // specialKey = SDL_SCANCODE_R; // Reload the game
+    // } else if (keyBitmaps & (1 << MYKEY_UP)) {
+        // updateClockOnEvent(pico.perf.cpuclockincrement); // Overclock increase
+    // } else if (keyBitmaps & (1 << MYKEY_DOWN)) {
+        // updateClockOnEvent(-pico.perf.cpuclockincrement); // Overclock decrease
+    // } else if (keyBitmaps & (1 << MYKEY_LEFT)) {
+        // updateBezelOnEvent(-1); // Bezel next
+    // } else if (keyBitmaps & (1 << MYKEY_RIGHT)) {
+        // updateBezelOnEvent(1); // Bezel previous
+    // } else if (keyBitmaps & (1 << MYKEY_R1)) {
+        // pico.state.screen_scaling = (pico.state.screen_scaling % 3) + 1;
+        // pico.state.integer_bezel = (pico.state.screen_scaling == 2) ? 1 : 0;
+        // drawStateHandler(1); // Change scaling
+    // }
+
+    // Clear the processed hotkey bits
+    // keyBitmaps &= ~((1 << MYKEY_MENU) | (1 << MYKEY_L1) | (1 << MYKEY_UP) | 
+                    // (1 << MYKEY_DOWN) | (1 << MYKEY_LEFT) | (1 << MYKEY_RIGHT) | 
+                    // (1 << MYKEY_R1));
+// }
+
 void flushEvents(void) {
     SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 }
@@ -307,8 +306,8 @@ void MMIYOO_EventInit(void)
     MMiyooEventInfo.mouse.miny = 0;
     MMiyooEventInfo.mouse.maxx = 278;
     MMiyooEventInfo.mouse.maxy = 240;
-    MMiyooEventInfo.mouse.x = 160;
-    MMiyooEventInfo.mouse.y = 120;
+    MMiyooEventInfo.mouse.x = pico.state.lastMouseX = 160;
+    MMiyooEventInfo.mouse.y = pico.state.lastMouseY = 120;
     MMiyooEventInfo.mode = MMIYOO_KEYPAD_MODE;
 
 #if defined(MMIYOO)
@@ -420,6 +419,7 @@ int EventUpdate(void *data)
                     }
                                                             
                     hotkey = MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_SELECT);
+                    // processHotkeys(MMiyooEventInfo.keypad.bitmaps);
                     
                     // refactor this, it's ugly
 
@@ -438,10 +438,10 @@ int EventUpdate(void *data)
                         updateClockOnEvent(-pico.perf.cpuclockincrement);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_DOWN);
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_LEFT))) { // bezel next
-                        updatebezelOnEvent(-1);
+                        updateBezelOnEvent(-1);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_LEFT);
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_RIGHT))) { // bezel previous
-                        updatebezelOnEvent(1);
+                        updateBezelOnEvent(1);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_RIGHT);
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_R1))) { // change scaling
                         pico.state.screen_scaling = (pico.state.screen_scaling % 3) + 1;
