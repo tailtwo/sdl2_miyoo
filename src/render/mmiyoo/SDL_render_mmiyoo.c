@@ -48,7 +48,7 @@ typedef struct {
     SDL_bool vsync;
 } MMIYOO_RenderData;
 
-#define MAX_TEXTURE 10
+#define MAX_TEXTURE 20
 
 struct _PICO_TEXTURE {
     int pitch;
@@ -63,18 +63,28 @@ static struct _PICO_TEXTURE ptex[MAX_TEXTURE] = {0};
 
 static int update_texture(void *chk, void *new, const void *pixels, int pitch)
 {
-    int cc = 0;
+    static int lastIndex = -1;
+    
+    if (lastIndex != -1 && ptex[lastIndex].texture == chk) {
+        ptex[lastIndex].texture = new;
+        ptex[lastIndex].pixels = pixels;
+        ptex[lastIndex].pitch = pitch;
+        return lastIndex;
+    }
 
-    for (cc=0; cc<MAX_TEXTURE; cc++) {
+    for (int cc = 0; cc < MAX_TEXTURE; ++cc) {
         if (ptex[cc].texture == chk) {
             ptex[cc].texture = new;
             ptex[cc].pixels = pixels;
             ptex[cc].pitch = pitch;
+            lastIndex = cc;
             return cc;
         }
     }
+
     return -1;
 }
+
 
 static const void* get_pixels(void *chk)
 {
@@ -205,18 +215,22 @@ static int MMIYOO_QueueFillRects(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
 
 static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_Texture *texture, const SDL_Rect *srcrect, const SDL_FRect *dstrect)
 {
-    int pitch = 0;
+    static int lastPitch = 0;
+    static const void *lastPixels = NULL;
+    static void *lastTexture = NULL;
     SDL_Rect dst = {0};
-    const void *pixels = NULL;
     static int show_digit_val = 0;
     static int show_digit_num = 0;
-   
+
     float m = (640.0 / srcrect->w < 480.0 / srcrect->h) ? 640.0 / srcrect->w : 480.0 / srcrect->h;
 
-    pitch = get_pitch(texture);
-    pixels = get_pixels(texture);
-    
-    if ((pitch == 0) || (pixels == NULL)) {
+    if (texture != lastTexture) {
+        lastPitch = get_pitch(texture);
+        lastPixels = get_pixels(texture);
+        lastTexture = texture;
+    }
+
+    if ((lastPitch == 0) || (lastPixels == NULL)) {
         return 0;
     }
     
@@ -270,11 +284,11 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
     }
     
     if (pico.state.screen_scaling != 1) {
-        dst.x = (640 - dst.w) / 2;
-        dst.y = (480 - dst.h) / 2;
+        dst.x = (FB_W - dst.w) / 2;
+        dst.y = (FB_H - dst.h) / 2;
     }
     
-    GFX_Copy(pixels, *srcrect, dst, pitch, 0, E_MI_GFX_ROTATE_180);
+    GFX_Copy(lastPixels, *srcrect, dst, lastPitch, 0, 0);
     
     return 0;
 }

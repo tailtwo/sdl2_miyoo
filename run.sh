@@ -7,6 +7,8 @@ export AS=${CROSS}as
 export LD=${CROSS}ld
 export CXX=${CROSS}g++
 export HOST=arm-linux
+export CFLAGS="-g -Wno-undef -marm -mtune=cortex-a7 -mfpu=neon-vfpv4  -march=armv7ve+simd -mfloat-abi=hard -ffunction-sections -fdata-sections"
+export CXXFLAGS="-s -O3 -fPIC -pthread"
 
 echo "Building SDL2 for Miyoo Mini / Miyoo Mini Plus"
 if [ ! -z "$1" ] && [ "$1" == "config" ]; then

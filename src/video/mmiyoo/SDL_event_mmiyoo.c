@@ -149,6 +149,7 @@ void updateClockOnEvent(int adjust) {
         set_cpuclock(newclock);
         pico.perf.cpuclock = newclock;
         drawStateHandler(2);
+        pico.state.wait_frame = 30;
     }
 }
 
@@ -167,6 +168,7 @@ void updateBezelOnEvent(int direction) {
         }
     }
     drawStateHandler(1);
+    pico.state.wait_frame = 30;
 }
 
 void sendSpecial() { // manage sending CTRL etc
@@ -377,12 +379,7 @@ int EventUpdate(void *data)
 
                     switch (ev.code) {
                         case 18:  bit = (1 << MYKEY_L1);      break;
-                        case 15:  
-                            bit = (1 << MYKEY_L2);
-                            if (ev.value == 1) { 
-                                modeSwitch();
-                            }
-                            break;
+                        case 15:  bit = (1 << MYKEY_L2);      break;
                         case 20:  bit = (1 << MYKEY_R1);      break;     
                         case 14:
                             bit = (1 << MYKEY_R2);
@@ -423,7 +420,6 @@ int EventUpdate(void *data)
                     // processHotkeys(MMiyooEventInfo.keypad.bitmaps);
                     
                     // refactor this, it's ugly
-
                     if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_MENU))) { // Quits
                         specialKey = SDL_SCANCODE_Q; 
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_MENU);
@@ -432,6 +428,11 @@ int EventUpdate(void *data)
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_L1))) { // reload the game
                         specialKey = SDL_SCANCODE_R; 
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L1);
+                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_L2))) { // mouse mode
+                        if (ev.value == 1) { 
+                                modeSwitch();
+                        }
+                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L2);
                     } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP))) { // overclock increase
                         updateClockOnEvent(pico.perf.cpuclockincrement);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_UP);
@@ -456,6 +457,7 @@ int EventUpdate(void *data)
                         drawStateHandler(1);
                         MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_R1);
                     }
+                                                
 
                 }
             }
@@ -519,7 +521,6 @@ void MMIYOO_PumpEvents(_THIS)
                     if ((v0 & 1) != (v1 & 1)) {
                         // printf("Special Key %d: %s\n", cc, (v1 & 1) ? "Pressed" : "Released");
                         SDL_SendKeyboardKey((v1 & 1) ? SDL_PRESSED : SDL_RELEASED, SDL_GetScancodeFromKey(code[cc]));
-                        pico.state.wait_frame = 30;
                     }
                 }
                 v0>>= 1;
