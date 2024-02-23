@@ -1,7 +1,7 @@
 # Warning:
 ### The main branch of this fork is out of date. The branches are out of date but the `vanilla` branch has most of the NDS specific logic removed and can be used at runtime for various apps.
 ### If your app uses TARGET textures, you will likely find they do NOT work for your application. 
-### To use these libs, use a STREAMING texture, blit everything to a surface and then update your final texture * rendercopy/present, an example of which is here:
+### To use these libs, use a STREAMING texture, blit everything to a surface and then update your final texture & rendercopy/present, an example of which is here:
 
 ```c
 void RenderManagerSDL::refresh()
