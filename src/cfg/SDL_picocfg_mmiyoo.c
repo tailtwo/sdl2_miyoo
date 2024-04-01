@@ -107,11 +107,9 @@ int cfgReadRes(struct json_object *jfile) {
 
 int cfgReadMouse(struct json_object *jfile) {
     struct json_object *jval = NULL;
-    struct json_object *jScaleFactor = NULL;
-    struct json_object *jAcceleration = NULL;
-    struct json_object *jAccelerationRate = NULL;
-    struct json_object *jMaxAcceleration = NULL;
-    struct json_object *jIncrementModifier = NULL;
+    struct json_object *jScaleFactor = NULL, *jAcceleration = NULL, *jAccelerationRate = NULL;
+    struct json_object *jMaxAcceleration = NULL, *jIncrementModifier = NULL, *jDisableMouseHotkey = NULL, *jDisableMouseIcon = NULL;
+    struct json_object *jMinX = NULL, *jMinY = NULL, *jMaxX = NULL, *jMaxY = NULL;
        
     json_object_object_get_ex(jfile, "mouse", &jval);
 
@@ -160,14 +158,77 @@ int cfgReadMouse(struct json_object *jfile) {
             pico.mouse.incrementModifier = MMIYOO_DEFAULT_INCREMENT_MODIFIER;
             printf("incrementModifier not found in json file. Using default: %f.\n", MMIYOO_DEFAULT_INCREMENT_MODIFIER);
         }
-    } else {
-        printf("Mouse settings not found in json file. Using defaults.\n");
-        pico.mouse.scaleFactor = MMIYOO_DEFAULT_SCALE_FACTOR;
-        pico.mouse.acceleration = MMIYOO_DEFAULT_ACCELERATION;
-        pico.mouse.accelerationRate = MMIYOO_DEFAULT_ACCELERATION_RATE;
-        pico.mouse.maxAcceleration = MMIYOO_DEFAULT_MAX_ACCELERATION;
-        pico.mouse.incrementModifier = MMIYOO_DEFAULT_INCREMENT_MODIFIER;
+                
+        json_object_object_get_ex(jval, "disableMouseHotkey", &jDisableMouseHotkey);
+        if (jDisableMouseHotkey) {
+            pico.mouse.disableMouseHotkey = json_object_get_int(jDisableMouseHotkey);
+            printf("[json] pico.mouse.disableMouseHotkey: %d\n", pico.mouse.disableMouseHotkey);
+        } else {
+            pico.mouse.disableMouseHotkey = MMIYOO_DEFAULT_MOUSE_HOTKEY;
+            printf("disableMouseHotkey not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MOUSE_HOTKEY);
+        }
+        
+        json_object_object_get_ex(jval, "disableMouseIcon", &jDisableMouseIcon);
+        if (jDisableMouseIcon) {
+            pico.mouse.disableMouseIcon = json_object_get_int(jDisableMouseIcon);
+            printf("[json] pico.mouse.disableMouseIcon: %d\n", pico.mouse.disableMouseIcon);
+        } else {
+            pico.mouse.disableMouseIcon = MMIYOO_DEFAULT_MOUSE_ICON;
+            printf("disableMouseIcon not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MOUSE_ICON);
+        }
+
+        json_object_object_get_ex(jval, "minx", &jMinX);
+        if (jMinX) {
+            pico.mouse.minx = json_object_get_int(jMinX);
+            printf("[json] pico.mouse.minx: %d\n", pico.mouse.minx);
+        } else {
+            pico.mouse.minx = MMIYOO_DEFAULT_MOUSE_MINX;
+            printf("minx not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MOUSE_MINX);
+        }
+
+        json_object_object_get_ex(jval, "miny", &jMinY);
+        if (jMinY) {
+            pico.mouse.miny = json_object_get_int(jMinY);
+            printf("[json] pico.mouse.miny: %d\n", pico.mouse.miny);
+        } else {
+            pico.mouse.miny = MMIYOO_DEFAULT_MOUSE_MINY;
+            printf("miny not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MOUSE_MINY);
+        }
+
+        json_object_object_get_ex(jval, "maxx", &jMaxX);
+        if (jMaxX) {
+            pico.mouse.maxx = json_object_get_int(jMaxX);
+            printf("[json] pico.mouse.maxx: %d\n", pico.mouse.maxx);
+        } else {
+            pico.mouse.maxx = MMIYOO_DEFAULT_MOUSE_MAXX;
+            printf("maxx not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MOUSE_MAXX);
+        }
+
+        json_object_object_get_ex(jval, "maxy", &jMaxY);
+        if (jMaxY) {
+            pico.mouse.maxy = json_object_get_int(jMaxY);
+            printf("[json] pico.mouse.maxy: %d\n", pico.mouse.maxy);
+        } else {
+            pico.mouse.maxy = MMIYOO_DEFAULT_MOUSE_MAXY;
+            printf("maxy not found in json file. Using default: %d.\n", MMIYOO_DEFAULT_MOUSE_MAXY);
+        }
+
+        if (!jval) {
+            printf("Mouse settings not found in json file. Using defaults.\n");
+            pico.mouse.scaleFactor = MMIYOO_DEFAULT_SCALE_FACTOR;
+            pico.mouse.acceleration = MMIYOO_DEFAULT_ACCELERATION;
+            pico.mouse.accelerationRate = MMIYOO_DEFAULT_ACCELERATION_RATE;
+            pico.mouse.maxAcceleration = MMIYOO_DEFAULT_MAX_ACCELERATION;
+            pico.mouse.incrementModifier = MMIYOO_DEFAULT_INCREMENT_MODIFIER;
+            pico.mouse.minx = MMIYOO_DEFAULT_MOUSE_MINX;
+            pico.mouse.miny = MMIYOO_DEFAULT_MOUSE_MINY;
+            pico.mouse.maxx = MMIYOO_DEFAULT_MOUSE_MAXX;
+            pico.mouse.maxy = MMIYOO_DEFAULT_MOUSE_MAXY;
+            printf("Defaults applied: minx=%d, miny=%d, maxx=%d, maxy=%d.\n", 
+                   pico.mouse.minx, pico.mouse.miny, pico.mouse.maxx, pico.mouse.maxy);
+        }
     }
+    
     return 0;
 }
 
@@ -175,8 +236,7 @@ int cfgReadClock(struct json_object *jfile) {
     
     struct json_object *jperf = NULL;
     struct json_object *jval = NULL;
-        
-        
+         
     if (!json_object_object_get_ex(jfile, "performance", &jperf) || !jperf) {
         printf("Performance settings not found in json file. Using defaults.\n");
         pico.perf.cpuclock = MMIYOO_DEFAULT_CPU_CLOCK;
@@ -433,8 +493,14 @@ int picoConfigWrite(void) {
     json_object_object_add(jmouse, "accelerationRate", json_object_new_double(pico.mouse.accelerationRate));
     json_object_object_add(jmouse, "maxAcceleration", json_object_new_double(pico.mouse.maxAcceleration));
     json_object_object_add(jmouse, "incrementModifier", json_object_new_double(pico.mouse.incrementModifier));
+    json_object_object_add(jmouse, "disableMouseHotkey", json_object_new_int(pico.mouse.disableMouseHotkey));
+    json_object_object_add(jmouse, "disableMouseIcon", json_object_new_int(pico.mouse.disableMouseIcon));
+    json_object_object_add(jmouse, "minx", json_object_new_int(pico.mouse.minx));
+    json_object_object_add(jmouse, "miny", json_object_new_int(pico.mouse.miny));
+    json_object_object_add(jmouse, "maxx", json_object_new_int(pico.mouse.maxx));
+    json_object_object_add(jmouse, "maxy", json_object_new_int(pico.mouse.maxy));
     json_object_object_add(jfile, "mouse", jmouse);
-
+    
     // performance
     jperformance = json_object_new_object();
     json_object_object_add(jperformance, "cpuclock", json_object_new_int(pico.perf.cpuclock));

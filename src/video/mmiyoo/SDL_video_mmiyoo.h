@@ -53,11 +53,9 @@
     #define MAX_PATH 255
 #endif
 
-#define FB_W                        640
-#define FB_H                        480
+#define DEF_FB_W                    640
+#define DEF_FB_H                    480
 #define FB_BPP                      4
-#define FB_SIZE                     (FB_W * FB_H * FB_BPP * 2)
-#define TMP_SIZE                    (FB_W * FB_H * FB_BPP)
 #define MMIYOO_DRIVER_NAME          "mmiyoo"
 #define BASE_REG_RIU_PA             0x1f000000
 #define BASE_REG_MPLL_PA            (BASE_REG_RIU_PA + 0x103000 * 2)
@@ -85,6 +83,8 @@ typedef struct _GFX {
         MI_GFX_Opt_t opt;
     } hw;
 } GFX;
+
+extern GFX gfx;
 
 void GFX_Clear(void);
 void GFX_Flip(void);

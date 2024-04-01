@@ -53,6 +53,8 @@ static SDL_Thread *thread = NULL;
 static uint32_t pre_keypad_bitmaps = 0;
 int volume_inc(void);
 int volume_dec(void);
+int menuReleased = 0;
+int otherBtnPressed = 0;
 
 int specialKey = 0;
 int r2Hold = 0;
@@ -67,7 +69,8 @@ void drawStateHandler(int action) {
             pico.state.refresh_bezel = 8;
             
             if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
-                pico.state.draw_mouse = 8;
+                if (!pico.mouse.disableMouseIcon)
+                    pico.state.draw_mouse = 8;
             }
             
             break;
@@ -75,7 +78,8 @@ void drawStateHandler(int action) {
             pico.state.oc_changed = 8;
             break;
         case 3:
-            pico.state.draw_mouse = 8;
+            if (!pico.mouse.disableMouseIcon)
+                pico.state.draw_mouse = 8;
             break;
         case 4:
             break;
@@ -83,7 +87,6 @@ void drawStateHandler(int action) {
             printf("error in drawStateHandler");
             break;
     }
-    pico.state.alpha_draw = 30;
     pico.state.wait_frame = 30;
     pico.state.push_update = 8;
 }
@@ -133,22 +136,18 @@ void updateClockOnEvent(int adjust) {
     int newclock = currentClock + adjust;
 
     if (newclock > pico.perf.maxcpu) {
-        // printf("Maximum Clock of %d MHz reached. Not increasing further.\n", pico.perf.maxcpu);
         newclock = pico.perf.maxcpu;
     }
 
     if (newclock < pico.perf.mincpu) {
-        // printf("Minimum Clock of %d MHz reached. Not decreasing further.\n", pico.perf.mincpu);
         newclock = pico.perf.mincpu;
     }
 
-    // printf("Current Clock: %d MHz\n", currentClock);
-
     if (currentClock != newclock) {
-        // printf("Updating Clock to %d MHz\n", newclock);
         set_cpuclock(newclock);
         pico.perf.cpuclock = newclock;
         drawStateHandler(2);
+        pico.state.wait_frame = 30;
     }
 }
 
@@ -167,9 +166,10 @@ void updateBezelOnEvent(int direction) {
         }
     }
     drawStateHandler(1);
+    pico.state.wait_frame = 30;
 }
 
-void sendSpecial() { // manage sending CTRL etc
+void sendSpecial() { 
     if (specialKey) {
         SDL_SendKeyboardKey(SDL_PRESSED, SDL_SCANCODE_LCTRL);
         SDL_SendKeyboardKey(SDL_PRESSED, specialKey);
@@ -196,6 +196,37 @@ void modeSwitch() { // toggle func for mouse/keypad mode
         drawStateHandler(1);
         printf("Mode switched to KEYPAD\n");
     }
+}
+
+void actionQuitGame(void) {
+    specialKey = SDL_SCANCODE_Q; 
+    running = 0;
+}
+
+void actionReloadGame(void) {
+    specialKey = SDL_SCANCODE_R;
+}
+
+void actionIncreaseClock(void) {
+    updateClockOnEvent(pico.perf.cpuclockincrement);
+}
+
+void actionDecreaseClock(void) {
+    updateClockOnEvent(-pico.perf.cpuclockincrement);
+}
+
+void actionNextBezel(void) {
+    updateBezelOnEvent(-1); 
+}
+
+void actionPreviousBezel(void) {
+    updateBezelOnEvent(1); 
+}
+
+void actionChangeScaling(void) {
+    pico.state.screen_scaling = (pico.state.screen_scaling % 3) + 1;
+    pico.state.integer_bezel = (pico.state.screen_scaling == 2) ? 1 : 0;
+    drawStateHandler(1); 
 }
 
 void handleR2Event(struct input_event ev) { // R2 for speeding up the mouse
@@ -232,67 +263,17 @@ void updateMousePosition(int xDirection, int yDirection) {
         pico.mouse.acceleration = pico.mouse.maxAcceleration;
     }
 
-    if (xDirection < 0) {
-        MMiyooEventInfo.mouse.x -= xIncrement;
-    } else if (xDirection > 0) {
-        MMiyooEventInfo.mouse.x += xIncrement;
-    }
+    MMiyooEventInfo.mouse.x += xDirection * xIncrement;
+    MMiyooEventInfo.mouse.x = (MMiyooEventInfo.mouse.x < pico.mouse.minx) ? pico.mouse.minx : MMiyooEventInfo.mouse.x;
+    MMiyooEventInfo.mouse.x = (MMiyooEventInfo.mouse.x > pico.mouse.maxx) ? pico.mouse.maxx : MMiyooEventInfo.mouse.x;
+    
+    MMiyooEventInfo.mouse.y += yDirection * yIncrement;
+    MMiyooEventInfo.mouse.y = (MMiyooEventInfo.mouse.y < pico.mouse.miny) ? pico.mouse.miny : MMiyooEventInfo.mouse.y;
+    MMiyooEventInfo.mouse.y = (MMiyooEventInfo.mouse.y > pico.mouse.maxy) ? pico.mouse.maxy : MMiyooEventInfo.mouse.y;
 
-    if (yDirection < 0) {
-        MMiyooEventInfo.mouse.y -= yIncrement;
-    } else if (yDirection > 0) {
-        MMiyooEventInfo.mouse.y += yIncrement;
-    }
-
-    if (MMiyooEventInfo.mouse.y < MMiyooEventInfo.mouse.miny) {
-        MMiyooEventInfo.mouse.y = MMiyooEventInfo.mouse.miny;
-    }
-    if (MMiyooEventInfo.mouse.y > MMiyooEventInfo.mouse.maxy) {
-        MMiyooEventInfo.mouse.y = MMiyooEventInfo.mouse.maxy;
-    }
-    if (MMiyooEventInfo.mouse.x < MMiyooEventInfo.mouse.minx) {
-        MMiyooEventInfo.mouse.x = MMiyooEventInfo.mouse.minx;
-    }
-    if (MMiyooEventInfo.mouse.x >= MMiyooEventInfo.mouse.maxx) {
-        MMiyooEventInfo.mouse.x = MMiyooEventInfo.mouse.maxx;
-    }
-        
-    // printf("Updated X-coordinate: %d, Y-coordinate: %d\n", MMiyooEventInfo.mouse.x, MMiyooEventInfo.mouse.y);
+    // printf("Current mouse position: X=%d, Y=%d\n", MMiyooEventInfo.mouse.x, MMiyooEventInfo.mouse.y);
 }
 
-// void processHotkeys(uint32_t keyBitmaps) {
-    // if (!(keyBitmaps & (1 << MYKEY_SELECT))) {
-        // return;
-    // }
-
-    // if (keyBitmaps & (1 << MYKEY_MENU)) {
-        // specialKey = SDL_SCANCODE_Q; 
-        // running = 0; // Quit
-    // } else if (keyBitmaps & (1 << MYKEY_L1)) {
-        // specialKey = SDL_SCANCODE_R; // Reload the game
-    // } else if (keyBitmaps & (1 << MYKEY_UP)) {
-        // updateClockOnEvent(pico.perf.cpuclockincrement); // Overclock increase
-    // } else if (keyBitmaps & (1 << MYKEY_DOWN)) {
-        // updateClockOnEvent(-pico.perf.cpuclockincrement); // Overclock decrease
-    // } else if (keyBitmaps & (1 << MYKEY_LEFT)) {
-        // updateBezelOnEvent(-1); // Bezel next
-    // } else if (keyBitmaps & (1 << MYKEY_RIGHT)) {
-        // updateBezelOnEvent(1); // Bezel previous
-    // } else if (keyBitmaps & (1 << MYKEY_R1)) {
-        // pico.state.screen_scaling = (pico.state.screen_scaling % 3) + 1;
-        // pico.state.integer_bezel = (pico.state.screen_scaling == 2) ? 1 : 0;
-        // drawStateHandler(1); // Change scaling
-    // }
-
-    // Clear the processed hotkey bits
-    // keyBitmaps &= ~((1 << MYKEY_MENU) | (1 << MYKEY_L1) | (1 << MYKEY_UP) | 
-                    // (1 << MYKEY_DOWN) | (1 << MYKEY_LEFT) | (1 << MYKEY_RIGHT) | 
-                    // (1 << MYKEY_R1));
-// }
-
-void flushEvents(void) {
-    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
-}
 
 int EventUpdate(void *data);
 
@@ -302,10 +283,10 @@ void MMIYOO_EventInit(void)
 
     pre_keypad_bitmaps = 0;
     memset(&MMiyooEventInfo, 0, sizeof(MMiyooEventInfo));
-    MMiyooEventInfo.mouse.minx = 38;
-    MMiyooEventInfo.mouse.miny = 0;
-    MMiyooEventInfo.mouse.maxx = 278;
-    MMiyooEventInfo.mouse.maxy = 240;
+    MMiyooEventInfo.mouse.minx = pico.mouse.minx;
+    MMiyooEventInfo.mouse.miny = pico.mouse.miny;
+    MMiyooEventInfo.mouse.maxx = pico.mouse.maxx;
+    MMiyooEventInfo.mouse.maxy = pico.mouse.maxy;
     MMiyooEventInfo.mouse.x = pico.state.lastMouseX = 160;
     MMiyooEventInfo.mouse.y = pico.state.lastMouseY = 120;
     MMiyooEventInfo.mode = MMIYOO_KEYPAD_MODE;
@@ -358,7 +339,7 @@ int EventUpdate(void *data)
     uint32_t bit = 0;
 
     while (running) { 
-    
+
         static int bezelRedrawn = 0;  
 
         if (pico.state.oc_decay > 0) {
@@ -376,38 +357,109 @@ int EventUpdate(void *data)
                     //printf("%s, code:%d\n", __func__, ev.code);
 
                     switch (ev.code) {
-                        case 18:  bit = (1 << MYKEY_L1);      break;
-                        case 15:  
-                            bit = (1 << MYKEY_L2);
-                            if (ev.value == 1) { 
-                                modeSwitch();
+                        case 1: // MYKEY_MENU
+                            if (ev.value == 0) {
+                                menuReleased = 1;
+                            } else {
+                                otherBtnPressed = 0;
                             }
+                            
+                            bit = (1 << MYKEY_MENU);
                             break;
-                        case 20:  bit = (1 << MYKEY_R1);      break;     
-                        case 14:
+
+                        case 18: // MYKEY_L1
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_L1);
+                            break;
+
+                        case 15: // MYKEY_L2
+                            otherBtnPressed = 1;    
+                            
+                            bit = (1 << MYKEY_L2);   
+                            
+                            if (!pico.mouse.disableMouseHotkey)
+                                if (ev.value == 1) { 
+                                    modeSwitch();
+                                }
+                            break;
+
+                        case 20: // MYKEY_R1
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_R1);
+                            break;
+
+                        case 14: // MYKEY_R2
+                            otherBtnPressed = 1;
                             bit = (1 << MYKEY_R2);
-                            if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE) {
+                            if (MMiyooEventInfo.mode == MMIYOO_MOUSE_MODE && ev.value == 1) {
                                 handleR2Event(ev);
                             }
                             break;
-                        case 103: bit = (1 << MYKEY_UP);      
+
+                        case 103: // MYKEY_UP
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_UP);
                             break;
-                        case 108: bit = (1 << MYKEY_DOWN);    
+                            
+                        case 108: // MYKEY_DOWN
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_DOWN);
                             break;
-                        case 105: bit = (1 << MYKEY_LEFT);    
+                            
+                        case 105: // MYKEY_LEFT
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_LEFT);
                             break;
-                        case 106: bit = (1 << MYKEY_RIGHT);   
+                            
+                        case 106: // MYKEY_RIGHT
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_RIGHT);
                             break;
-                        case 57:  bit = (1 << MYKEY_A);       break;
-                        case 29:  bit = (1 << MYKEY_B);       break;
-                        case 42:  bit = (1 << MYKEY_X);       break;
-                        case 56:  bit = (1 << MYKEY_Y);       break;
-                        case 28:  bit = (1 << MYKEY_START);   break;
-                        case 97:  bit = (1 << MYKEY_SELECT);  break;
-                        case 1:   bit = (1 << MYKEY_MENU);    break;
-                        case 116: bit = (1 << MYKEY_POWER);   break;
-                        case 114: bit = (1 << MYKEY_VOLDOWN); break;
-                        case 115: bit = (1 << MYKEY_VOLUP);
+                            
+                        case 57: // MYKEY_A
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_A);
+                            break;
+                            
+                        case 29: // MYKEY_B
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_B);
+                            break;
+                            
+                        case 42: // MYKEY_X
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_X);
+                            break;
+                            
+                        case 56: // MYKEY_Y
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_Y);
+                            break;
+                            
+                        case 28: // MYKEY_START
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_START);
+                            break;
+                            
+                        case 97: // MYKEY_SELECT
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_SELECT);
+                            break;
+
+                        case 116: // MYKEY_POWER
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_POWER);
+                            break;
+                            
+                        case 114: // MYKEY_VOLDOWN
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_VOLDOWN);
+                            break;
+                            
+                        case 115: // MYKEY_VOLUP
+                            otherBtnPressed = 1;
+                            bit = (1 << MYKEY_VOLUP);
+                            break;
                     }
                     
                     if(bit){
@@ -420,46 +472,32 @@ int EventUpdate(void *data)
                     }
                                                             
                     hotkey = MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_SELECT);
-                    // processHotkeys(MMiyooEventInfo.keypad.bitmaps);
                     
-                    // refactor this, it's ugly
-
-                    if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_MENU))) { // Quits
-                        specialKey = SDL_SCANCODE_Q; 
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_MENU);
-                        hotkey = 0;
-                        running = 0;
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_L1))) { // reload the game
-                        specialKey = SDL_SCANCODE_R; 
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L1);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP))) { // overclock increase
-                        updateClockOnEvent(pico.perf.cpuclockincrement);
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_UP);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_DOWN))) { // overclock decrease
-                        updateClockOnEvent(-pico.perf.cpuclockincrement);
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_DOWN);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_LEFT))) { // bezel next
-                        updateBezelOnEvent(-1);
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_LEFT);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_RIGHT))) { // bezel previous
-                        updateBezelOnEvent(1);
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_RIGHT);
-                    } else if (hotkey && (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_R1))) { // change scaling
-                        pico.state.screen_scaling = (pico.state.screen_scaling % 3) + 1;
-
-                        if (pico.state.screen_scaling == 2) {
-                            pico.state.integer_bezel = 1;
-                        } else {
-                            pico.state.integer_bezel = 0;
+                    if (hotkey) {
+                        if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_L1)) {
+                            actionReloadGame();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_L1);
+                        } else if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_UP)) {
+                            actionIncreaseClock();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_UP);
+                        } else if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_DOWN)) {
+                            actionDecreaseClock();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_DOWN);
+                        } else if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_LEFT)) {
+                            actionNextBezel();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_LEFT);
+                        } else if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_RIGHT)) {
+                            actionPreviousBezel();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_RIGHT);
+                        } else if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_R1)) {
+                            actionChangeScaling();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_R1);
                         }
-
-                        drawStateHandler(1);
-                        MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_R1);
-                    }
-
+                    }                      
                 }
             }
         }
+        
         SDL_SemPost(event_sem);
         usleep(1000000 / 120);
     }
@@ -473,16 +511,26 @@ void MMIYOO_PumpEvents(_THIS)
 // Pause = Enter
 
 {
-   
     int updated = 0;
     int xDirection, yDirection;
     
     SDL_SemWait(event_sem);
+          
+    if (otherBtnPressed && menuReleased) {
+        resetInputStates();
+        otherBtnPressed = 0;
+        menuReleased = 0;
+    }
+    
+    if (menuReleased) {
+        menuReleased = 0;
+        actionQuitGame();
+    }
     
     if (specialKey) { 
         sendSpecial();
     }
-                
+    
     if (MMiyooEventInfo.mode == MMIYOO_KEYPAD_MODE) {
         if (pre_keypad_bitmaps != MMiyooEventInfo.keypad.bitmaps) {
             int cc = 0;
@@ -519,7 +567,6 @@ void MMIYOO_PumpEvents(_THIS)
                     if ((v0 & 1) != (v1 & 1)) {
                         // printf("Special Key %d: %s\n", cc, (v1 & 1) ? "Pressed" : "Released");
                         SDL_SendKeyboardKey((v1 & 1) ? SDL_PRESSED : SDL_RELEASED, SDL_GetScancodeFromKey(code[cc]));
-                        pico.state.wait_frame = 30;
                     }
                 }
                 v0>>= 1;
@@ -557,7 +604,6 @@ void MMIYOO_PumpEvents(_THIS)
     
     SDL_SemPost(event_sem);
 }
-
 
 #endif
 

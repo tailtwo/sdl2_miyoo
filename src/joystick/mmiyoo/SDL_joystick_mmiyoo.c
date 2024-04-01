@@ -74,7 +74,7 @@ static SDL_JoystickID MMIYOO_JoystickGetDeviceInstanceID(int device_index)
 
 static int MMIYOO_JoystickOpen(SDL_Joystick *joystick, int device_index)
 {
-    joystick->nbuttons = 28; // tis a lie = FIXMARKER
+    joystick->nbuttons = 28; // tis a lie
     joystick->naxes = 2;
     joystick->nhats = 0;
     return 0;

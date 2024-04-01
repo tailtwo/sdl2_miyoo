@@ -54,14 +54,18 @@
 #include "SDL_opengles_mmiyoo.h"
 #include "SDL_framebuffer_mmiyoo.h"
 #include "neon.h"
-
 #include "hex_pen.h"
 
 MMIYOO_VideoInfo MMiyooVideoInfo={0};
 extern PICO pico;
 extern MMIYOO_EventInfo MMiyooEventInfo;
 
-static GFX gfx = {0};
+int FB_W = 0;
+int FB_H = 0;
+int FB_SIZE = 0;
+int TMP_SIZE = 0;
+
+GFX gfx = {0};
 static int MMIYOO_VideoInit(_THIS);
 static int MMIYOO_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMode *mode);
 static void MMIYOO_VideoQuit(_THIS);
@@ -75,29 +79,72 @@ int fileExists(const char *path) {
     return 0;
 }
 
+SDL_Surface* rotateSurface180(SDL_Surface* src) {
+    Uint8 *pixels_src, *pixels_dst;
+    int bpp, x, y;
+    int index_src, index_dst;
+    SDL_Surface* rotated;
+
+    rotated = SDL_CreateRGBSurface(0, src->w, src->h, src->format->BitsPerPixel,
+                                   src->format->Rmask, src->format->Gmask,
+                                   src->format->Bmask, src->format->Amask);
+
+    if (!rotated) {
+        fprintf(stderr, "Unable to create rotated surface! SDL Error: %s\n", SDL_GetError());
+        return NULL;
+    }
+
+    SDL_LockSurface(src);
+    SDL_LockSurface(rotated);
+
+    pixels_src = (Uint8*)src->pixels;
+    pixels_dst = (Uint8*)rotated->pixels;
+    bpp = src->format->BytesPerPixel;
+
+    for (y = 0; y < src->h; y++) {
+        for (x = 0; x < src->w; x++) {
+            index_src = (y * src->w + x) * bpp;
+            index_dst = ((src->h - y - 1) * src->w + (src->w - x - 1)) * bpp;
+            memcpy(&pixels_dst[index_dst], &pixels_src[index_src], bpp);
+        }
+    }
+
+    SDL_UnlockSurface(src);
+    SDL_UnlockSurface(rotated);
+
+    return rotated;
+}
+
 SDL_Surface* loadSurfaceWithAlpha(const char* path) {
-    SDL_Surface* loadedSurface;
-    SDL_Surface* optimizedSurface;
-    
+    SDL_Surface* loadedSurface, *optimizedSurface, *rotatedSurface;
+
     loadedSurface = IMG_Load(path);
     if (loadedSurface == NULL) {
         fprintf(stderr, "Unable to load image %s! SDL_image Error: %s\n", path, IMG_GetError());
         return NULL;
     }
+
     optimizedSurface = SDL_ConvertSurfaceFormat(loadedSurface, SDL_PIXELFORMAT_ARGB8888, 0);
+    SDL_FreeSurface(loadedSurface);
+
     if (!optimizedSurface) {
         fprintf(stderr, "Unable to optimize image %s! SDL Error: %s\n", path, SDL_GetError());
-        SDL_FreeSurface(loadedSurface);
         return NULL;
     }
 
-    printf("Loaded and optimized image: %s\n", path);
+    rotatedSurface = rotateSurface180(optimizedSurface);
+    SDL_FreeSurface(optimizedSurface);
 
-    SDL_SetSurfaceBlendMode(optimizedSurface, SDL_BLENDMODE_BLEND);
-    SDL_FreeSurface(loadedSurface);
+    if (!rotatedSurface) {
+        return NULL;
+    }
 
-    return optimizedSurface;
+    SDL_SetSurfaceBlendMode(rotatedSurface, SDL_BLENDMODE_BLEND);
+
+    // printf("Loaded, optimized, and rotated image: %s\n", path);
+    return rotatedSurface;
 }
+
 int preloadResources() {
     char buf[255] = {0};
     char mouse_icon_path[PATH_MAX];
@@ -492,16 +539,16 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     gfx.hw.dst.surf.eColorFmt = E_MI_GFX_FMT_ARGB8888;
     gfx.hw.dst.surf.phyAddr = gfx.fb.phyAddr + (FB_W * gfx.vinfo.yoffset * FB_BPP);
 
-    if (pico.state.alpha_draw > 0) { // should really use the functions alpha value
+    if (pico.state.alpha_draw > 0) {
         gfx.hw.opt.u32GlobalSrcConstColor = 0xff000000;
-        gfx.hw.opt.eRotate = rotate;
+        gfx.hw.opt.eRotate = 0;
         gfx.hw.opt.eSrcDfbBldOp = E_MI_GFX_DFB_BLD_ONE;
         gfx.hw.opt.eDstDfbBldOp = E_MI_GFX_DFB_BLD_INVSRCALPHA;
         gfx.hw.opt.eDFBBlendFlag = E_MI_GFX_DFB_BLEND_SRC_PREMULTIPLY | E_MI_GFX_DFB_BLEND_COLORALPHA | E_MI_GFX_DFB_BLEND_ALPHACHANNEL;
         pico.state.alpha_draw -= 1;
     } else {
         gfx.hw.opt.u32GlobalSrcConstColor = 0;
-        gfx.hw.opt.eRotate = rotate;
+        gfx.hw.opt.eRotate = 0;
         gfx.hw.opt.eSrcDfbBldOp = E_MI_GFX_DFB_BLD_ONE;
         gfx.hw.opt.eDstDfbBldOp = 0;
         gfx.hw.opt.eDFBBlendFlag = 0;
@@ -509,12 +556,8 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     
     MI_SYS_FlushInvCache(gfx.tmp.virAddr, pitch * srcrect.h);
     MI_GFX_BitBlit(&gfx.hw.src.surf, &gfx.hw.src.rt, &gfx.hw.dst.surf, &gfx.hw.dst.rt, &gfx.hw.opt, &u16Fence);
-    
-    if (pico.state.wait_frame > 0) { // only wait when there's input
-        MI_GFX_WaitAllDone(FALSE, u16Fence);
-        pico.state.wait_frame -= 1;
-    }
-    
+    MI_GFX_WaitAllDone(FALSE, u16Fence);
+
     return 0;
 }
 
@@ -542,8 +585,9 @@ int MMIYOO_CreateWindow(_THIS, SDL_Window *window)
 {
     SDL_SetMouseFocus(window);
     MMiyooVideoInfo.window = window;
+    window->w = FB_W; // this is just for pico, the rendering method reports a 1x1 display so we force it or the mouse breaks (don't know root)
+    window->h = FB_H;
     printf("%s, w:%d, h:%d\n", __func__, window->w, window->h);
-    //glUpdateBufferSettings(fb_flip, &fb_idx, fb_vaddr);
     drawStateHandler(1);
     return 0;
 }
@@ -604,6 +648,8 @@ VideoBootStrap MMIYOO_bootstrap = {MMIYOO_DRIVER_NAME, "MMIYOO VIDEO DRIVER", MM
 
 int MMIYOO_VideoInit(_THIS)
 {
+    FILE *fd = NULL;
+    char buf[1024];
 
     SDL_DisplayMode mode={0};
     SDL_VideoDisplay display={0};
@@ -635,6 +681,7 @@ int MMIYOO_VideoInit(_THIS)
     mode.h = 480;
     mode.refresh_rate = 60;
     SDL_AddDisplayMode(&display, &mode);
+    
     SDL_zero(mode);
     mode.format = SDL_PIXELFORMAT_RGB565;
     mode.w = 800;
@@ -676,17 +723,32 @@ int MMIYOO_VideoInit(_THIS)
     mode.h = 272;
     mode.refresh_rate = 60;
     SDL_AddDisplayMode(&display, &mode);
-
     SDL_AddVideoDisplay(&display, SDL_FALSE);
+    
+    FB_W = DEF_FB_W;
+    FB_H = DEF_FB_H;
+    FB_SIZE = (FB_W * FB_H * FB_BPP * 2);
+    TMP_SIZE = (FB_W * FB_H * FB_BPP);
+       
+    fd = popen("fbset | grep \"mode \"", "r");
+    if (fd) {
+        fgets(buf, sizeof(buf), fd);
+        pclose(fd);
+        
+        if (strstr(buf, "752")) {
+            FB_W = 752;
+            FB_H = 560;
+            FB_SIZE = FB_W * FB_H * FB_BPP * 2;
+            TMP_SIZE = FB_W * FB_H * FB_BPP;
+        }
+    }
     
     GFX_Init();
     picoConfigRead();
     get_cpuclock();
     set_cpuclock(pico.perf.cpuclock);
     MMIYOO_EventInit();
-        
     preloadResources();
-
     return 0;
 }
 
