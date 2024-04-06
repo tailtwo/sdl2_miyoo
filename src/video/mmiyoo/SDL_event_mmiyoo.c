@@ -46,6 +46,7 @@ SMANIA smania = {
     .screen_scaling = 0, 
 };
 
+uint32_t hotkey = 0;
 static int running = 0;
 static int event_fd = -1;
 static uint32_t pre_ticks = 0;
