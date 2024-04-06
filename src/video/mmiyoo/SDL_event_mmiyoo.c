@@ -42,6 +42,10 @@ MMIYOO_EventInfo MMiyooEventInfo = {0};
 
 extern MMIYOO_VideoInfo MMiyooVideoInfo;
 
+SMANIA smania = {
+    .screen_scaling = 0, 
+};
+
 static int running = 0;
 static int event_fd = -1;
 static uint32_t pre_ticks = 0;
@@ -63,6 +67,10 @@ static void check_mouse_pos(void)
     if (MMiyooEventInfo.mouse.x >= MMiyooEventInfo.mouse.maxx) {
         MMiyooEventInfo.mouse.x = MMiyooEventInfo.mouse.maxx;
     }
+}
+
+void actionChangeScaling(void) {
+    smania.screen_scaling = (smania.screen_scaling % 2) + 1;
 }
 
 static int get_move_interval(int type)
@@ -117,6 +125,16 @@ int EventUpdate(void *data)
                             MMiyooEventInfo.keypad.bitmaps&= ~bit;
                         }
                     }
+                    
+                    hotkey = MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_SELECT);
+                    
+                    if (hotkey) {
+                        if (MMiyooEventInfo.keypad.bitmaps & (1 << MYKEY_R1)) {
+                            actionChangeScaling();
+                            MMiyooEventInfo.keypad.bitmaps &= ~(1 << MYKEY_R1);
+                        }
+                    }
+                    
                 }
             
                 if (!(MMiyooEventInfo.keypad.bitmaps & 0x0f)) {

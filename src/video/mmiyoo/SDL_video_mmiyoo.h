@@ -85,6 +85,12 @@ typedef struct _GFX {
     } hw;
 } GFX;
 
+typedef struct SMANIA {
+    int screen_scaling;
+} SMANIA;
+
+extern SMANIA smania;
+
 void GFX_Clear(void);
 void GFX_Flip(void);
 int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, int alpha, int rotate);

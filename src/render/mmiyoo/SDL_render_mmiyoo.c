@@ -217,11 +217,29 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
     if ((pitch == 0) || (pixels == NULL)) {
         return 0;
     }
+    
+    switch (smania.screen_scaling) {
+        case 1:
+            dst.w = 640;
+            dst.h = 480;
+            dst.x = 0;
+            dst.y = 0;
+            break;
+        case 2: 
+            dst.w = m * srcrect->w;
+            dst.h = m * srcrect->h;
+            break;
+        default:
+            dst.w = m * srcrect->w;
+            dst.h = m * srcrect->h;
+            break;
+    }
 
     dst.w = m * srcrect->w;
     dst.h = m * srcrect->h;
     dst.x = (640 - dst.w) / 2;
     dst.y = (480 - dst.h) / 2;
+    
     GFX_Copy(pixels, *srcrect, dst, pitch, 0, E_MI_GFX_ROTATE_180);
     return 0;
 }
