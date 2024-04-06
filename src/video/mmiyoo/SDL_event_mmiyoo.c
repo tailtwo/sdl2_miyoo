@@ -72,6 +72,7 @@ static void check_mouse_pos(void)
 
 void actionChangeScaling(void) {
     smania.screen_scaling = (smania.screen_scaling % 2) + 1;
+    GFX_Clear();
 }
 
 static int get_move_interval(int type)
