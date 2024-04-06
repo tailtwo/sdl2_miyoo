@@ -235,10 +235,10 @@ static int MMIYOO_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd, SDL_
             break;
     }
 
-    dst.w = m * srcrect->w;
-    dst.h = m * srcrect->h;
-    dst.x = (640 - dst.w) / 2;
-    dst.y = (480 - dst.h) / 2;
+    if (smania.screen_scaling != 1) {
+        dst.x = (FB_W - dst.w) / 2;
+        dst.y = (FB_H - dst.h) / 2;
+    }
     
     GFX_Copy(pixels, *srcrect, dst, pitch, 0, E_MI_GFX_ROTATE_180);
     return 0;
