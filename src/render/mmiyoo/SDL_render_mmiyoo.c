@@ -377,8 +377,8 @@ SDL_RenderDriver MMIYOO_RenderDriver = {
         .texture_formats = {
             [0] = SDL_PIXELFORMAT_RGB565, [2] = SDL_PIXELFORMAT_ARGB8888,
         },
-        .max_texture_width = 800,
-        .max_texture_height = 600,
+        .max_texture_width = 1920,
+        .max_texture_height = 1080,
     }
 };
 
