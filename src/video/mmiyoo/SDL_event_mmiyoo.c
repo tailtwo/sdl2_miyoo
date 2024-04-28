@@ -197,9 +197,9 @@ void MMIYOO_PumpEvents(_THIS)
 {
     const SDL_Scancode code[]={
         SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT,
-        SDLK_SPACE, SDLK_LCTRL, SDLK_LSHIFT, SDLK_LALT,
+        SDLK_a, SDLK_b, SDLK_x, SDLK_y,
         SDLK_e, SDLK_t, SDLK_TAB, SDLK_BACKSPACE,
-        SDLK_RCTRL, SDLK_RETURN, SDLK_ESCAPE
+        SDLK_c, SDLK_RETURN, SDLK_ESCAPE
     };
 
     SDL_SemWait(event_sem);
