@@ -113,11 +113,37 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
 {
     MI_U16 u16Fence = 0;
 
+    int x = 0;
+    int y = 0;
+
+    uint16_t *s0 = NULL;
+    uint16_t *s1 = (uint16_t*)pixels;
+    uint16_t *d = (uint16_t*)gfx.tmp.virAddr;
+
+    for (y=0; y<srcrect.h; y++) {
+        s0 = d;
+        for (x=0; x<srcrect.w; x++) {
+            *d++ = *s1;
+            *d++ = *s1++;
+        }
+        memcpy(d, s0, 1024);
+        d+= 512;
+     }
+
+    srcrect.x = 0;
+    srcrect.y = 0;
+    srcrect.w = 512;
+    srcrect.h = 480;
+    pitch = srcrect.w * 2;
+
     if (pixels == NULL) {
         return -1;
     }
-    memcpy(gfx.tmp.virAddr, pixels, srcrect.h * pitch);
+    //memcpy(gfx.tmp.virAddr, pixels, srcrect.h * pitch);
     
+    gfx.hw.src.surf.phyAddr = gfx.tmp.phyAddr;
+    MI_SYS_FlushInvCache(gfx.tmp.virAddr, pitch * srcrect.h);
+
     gfx.hw.opt.u32GlobalSrcConstColor = 0;
     gfx.hw.opt.eRotate = rotate;
     gfx.hw.opt.eSrcDfbBldOp = E_MI_GFX_DFB_BLD_ONE;
@@ -132,7 +158,8 @@ int GFX_Copy(const void *pixels, SDL_Rect srcrect, SDL_Rect dstrect, int pitch, 
     gfx.hw.src.surf.u32Height = srcrect.h;
     gfx.hw.src.surf.u32Stride = pitch;
     gfx.hw.src.surf.eColorFmt = (pitch / srcrect.w) == 2 ? E_MI_GFX_FMT_RGB565 : E_MI_GFX_FMT_ARGB8888;
-    gfx.hw.src.surf.phyAddr = gfx.tmp.phyAddr;
+    gfx.hw.dst.surf.phyAddr = gfx.fb.phyAddr + (FB_W * gfx.vinfo.yoffset * FB_BPP);
+    //gfx.hw.src.surf.phyAddr = gfx.tmp.phyAddr;
     
     gfx.hw.dst.rt.s32Xpos = 0;
     gfx.hw.dst.rt.s32Ypos = 0;
